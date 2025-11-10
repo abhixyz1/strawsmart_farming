@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "448830821403",
+    "firebase_url": "https://strawsmart-farming-af721-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "strawsmart-farming-af721",
+    "storage_bucket": "strawsmart-farming-af721.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:448830821403:android:695c4e71d00f15088d54be",
+        "android_client_info": {
+          "package_name": "com.example.strawsmart_farming"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDieNF6tfpdZJgChOqKFqbM1vNy4j8X5wI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
