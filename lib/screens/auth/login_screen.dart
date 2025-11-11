@@ -55,7 +55,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 Transform.translate(offset: const Offset(0, 28),
                 child: Image.asset('assets/images/icon.png', width: 256, height: 256)),
                 Text(
-                  'Masuk ke StrawSmart',
+                  'Login to StrawSmart',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 24),
@@ -101,7 +101,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         controller: _passC,
                         obscureText: _obscure,
                         decoration: InputDecoration(
-                          labelText: 'Kata sandi',
+                          labelText: 'Password',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
                             onPressed: () =>
@@ -138,7 +138,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Text('Masuk'),
+                              : const Text('Login'),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -154,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   ),
                                 );
                               },
-                        child: const Text('Lupa kata sandi?'),
+                        child: const Text('Forgot Password?'),
                       ),
                     ],
                   ),
