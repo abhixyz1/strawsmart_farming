@@ -26,10 +26,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(authControllerProvider.notifier).signIn(
-          _emailC.text.trim(),
-          _passC.text,
-        );
+    await ref
+        .read(authControllerProvider.notifier)
+        .signIn(_emailC.text.trim(), _passC.text);
     final state = ref.read(authControllerProvider);
     state.whenOrNull(
       data: (user) {
@@ -53,10 +52,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.energy_savings_leaf, size: 64),
-                const SizedBox(height: 12),
-                Text('Masuk ke StrawSmart',
-                    style: Theme.of(context).textTheme.headlineSmall),
+                Transform.translate(offset: const Offset(0, 28),
+                child: Image.asset('assets/images/icon.png', width: 256, height: 256)),
+                Text(
+                  'Masuk ke StrawSmart',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
                 const SizedBox(height: 24),
                 if (errMsg != null)
                   Container(
@@ -68,8 +69,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.redAccent),
                     ),
-                    child: Text(errMsg,
-                        style: const TextStyle(color: Colors.redAccent)),
+                    child: Text(
+                      errMsg,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
                   ),
                 Form(
                   key: _formKey,
@@ -101,8 +104,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           labelText: 'Kata sandi',
                           prefixIcon: const Icon(Icons.lock_outline),
                           suffixIcon: IconButton(
-                            onPressed: () => setState(() => _obscure = !_obscure),
-                            icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
+                            onPressed: () =>
+                                setState(() => _obscure = !_obscure),
+                            icon: Icon(
+                              _obscure
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                            ),
                           ),
                         ),
                         validator: (v) {
@@ -124,7 +132,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           onPressed: loading ? null : _submit,
                           child: loading
                               ? const SizedBox(
-                                  width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2),
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('Masuk'),
                         ),
@@ -136,7 +148,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             : () {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Fitur reset kata sandi akan ditambahkan.'),
+                                    content: Text(
+                                      'Fitur reset kata sandi akan ditambahkan.',
+                                    ),
                                   ),
                                 );
                               },
