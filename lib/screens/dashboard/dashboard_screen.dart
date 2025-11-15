@@ -1,3 +1,5 @@
+﻿import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -45,13 +47,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       destinations: _destinations,
       selectedIndex: _selectedIndex,
       onIndexChanged: (index) => setState(() => _selectedIndex = index),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton.extended(
-              onPressed: () {},
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('Tambah device'),
-            )
-          : null,
+      floatingActionButton: null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
