@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
+import '../auth/user_profile_repository.dart';
 import '../../core/widgets/app_shell.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -73,12 +74,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
+    final profileAsync = ref.watch(currentUserProfileProvider);
+    final displayName = profileAsync.when<String?>(
+      data: (profile) => profile?.name,
+      loading: () => null,
+      error: (_, __) => null,
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _HeroHeader(),
+          _HeroHeader(userName: displayName),
           const SizedBox(height: 28),
           _SectionHeader(
             title: 'Sensor Wokwi real-time',
@@ -262,11 +270,16 @@ class _DashboardAppBar extends StatelessWidget {
 }
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader();
+  const _HeroHeader({this.userName});
+
+  final String? userName;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
+    final name = (userName == null || userName!.trim().isEmpty)
+        ? 'Grower'
+        : userName!.trim();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -284,7 +297,7 @@ class _HeroHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Selamat datang kembali, Grower!',
+              'Selamat datang kembali, $name!',
               style: theme.titleMedium?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
