@@ -5,14 +5,20 @@ import 'package:flutter/material.dart';
 import 'screens/auth/auth_repository.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
+import 'screens/splash/splash_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authStateProvider);
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/splash',
     refreshListenable: GoRouterRefreshStream(ref.read(authRepositoryProvider).authStateChanges),
     routes: [
+      GoRoute(
+        path: '/splash',
+        name: 'splash',
+        builder: (context, state) => const SplashScreen(),
+      ),
       GoRoute(
         path: '/login',
         name: 'login',
@@ -27,13 +33,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final isLoggedIn = auth.valueOrNull != null;
       final loggingIn = state.fullPath == '/login';
+      final onSplash = state.fullPath == '/splash';
 
-      if (!isLoggedIn && !loggingIn) {
+      if (!isLoggedIn) {
+        if (onSplash || loggingIn) return null;
         return '/login';
       }
-      if (isLoggedIn && loggingIn) {
+
+      if (isLoggedIn && (loggingIn || onSplash)) {
         return '/dashboard';
       }
+
       return null;
     },
   );
