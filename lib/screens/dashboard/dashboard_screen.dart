@@ -89,20 +89,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final width = constraints.maxWidth;
-              final columns = width >= 1100
-                  ? 4
-                  : width >= 800
-                      ? 3
-                      : width >= 520
-                          ? 2
-                          : 1;
-              final aspectRatio = width >= 1100
-                  ? 2.2
-                  : width >= 800
-                      ? 1.6
-                      : width >= 520
-                          ? 1.35
-                          : 1.2;
+              late final int columns;
+              late final double aspectRatio;
+              if (width >= 1100) {
+                columns = 4;
+                aspectRatio = 2.2;
+              } else if (width >= 800) {
+                columns = 3;
+                aspectRatio = 1.6;
+              } else if (width >= 520) {
+                columns = 2;
+                aspectRatio = 1.35;
+              } else {
+                columns = 1;
+                aspectRatio = _mobileSensorCardAspectRatio(width);
+              }
+
               return GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
@@ -115,7 +117,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 itemCount: _sensorStatuses.length,
                 itemBuilder: (context, index) {
                   final sensor = _sensorStatuses[index];
-                  return _SensorStatusCard(sensor: sensor);
+                  return _SensorStatusCard(
+                    sensor: sensor,
+                    compact: columns == 1,
+                  );
                 },
               );
             },
@@ -189,6 +194,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ],
       ),
     );
+  }
+
+  double _mobileSensorCardAspectRatio(double availableWidth) {
+    if (availableWidth <= 0) {
+      return 1.6;
+    }
+    final double targetHeight = availableWidth < 360 ? 210 : 190;
+    final ratio = availableWidth / targetHeight;
+    final num clampedRatio = ratio.clamp(1.45, 2.1);
+    return clampedRatio.toDouble();
   }
 }
 
@@ -362,9 +377,13 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _SensorStatusCard extends StatelessWidget {
-  const _SensorStatusCard({required this.sensor});
+  const _SensorStatusCard({
+    required this.sensor,
+    this.compact = false,
+  });
 
   final _SensorStatus sensor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -433,7 +452,10 @@ class _SensorStatusCard extends StatelessWidget {
                   .bodySmall
                   ?.copyWith(color: Colors.grey[700]),
             ),
-            const Spacer(),
+            if (compact)
+              const SizedBox(height: 12)
+            else
+              const Spacer(),
             Text(
               'Rentang ideal: ${sensor.range}',
               style: Theme.of(context)
