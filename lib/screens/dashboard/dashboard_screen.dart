@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
 import '../../core/widgets/app_shell.dart';
+import 'dashboard_repository.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -13,7 +14,8 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedIndex = 0;
-  bool _pumpOn = true;
+  bool _isSendingPumpCommand = false;
+  bool _isUpdatingControlMode = false;
 
   static const _destinations = [
     NavigationDestination(
@@ -40,6 +42,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final latestAsync = ref.watch(latestTelemetryProvider);
+    final statusAsync = ref.watch(deviceStatusProvider);
+    final pumpAsync = ref.watch(pumpStatusProvider);
+    final ackAsync = ref.watch(systemAckProvider);
+    final controlModeAsync = ref.watch(controlModeProvider);
     final sectionTitle = _destinations[_selectedIndex].label;
     return AppShell(
       destinations: _destinations,
@@ -61,13 +68,29 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ref.read(authControllerProvider.notifier).signOut(),
           ),
           const Divider(height: 1),
-          Expanded(child: _buildBody(sectionTitle)),
+          Expanded(
+            child: _buildBody(
+              sectionTitle,
+              latestAsync,
+              statusAsync,
+              pumpAsync,
+              ackAsync,
+              controlModeAsync,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBody(String sectionTitle) {
+  Widget _buildBody(
+    String sectionTitle,
+    AsyncValue<SensorSnapshot?> latestAsync,
+    AsyncValue<DeviceStatusData?> statusAsync,
+    AsyncValue<PumpStatusData?> pumpAsync,
+    AsyncValue<CommandAck?> ackAsync,
+    AsyncValue<ControlMode> controlModeAsync,
+  ) {
     if (_selectedIndex != 0) {
       return Center(
         child: Text(
@@ -90,40 +113,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 'Terhubung ke modul virtual untuk suhu, cahaya, kelembapan, dan tanah.',
           ),
           const SizedBox(height: 16),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
-              final columns = width >= 1100
-                  ? 4
-                  : width >= 800
-                      ? 3
-                      : width >= 520
-                          ? 2
-                          : 1;
-              final aspectRatio = width >= 1100
-                  ? 2.2
-                  : width >= 800
-                      ? 1.6
-                      : width >= 520
-                          ? 1.35
-                          : 1.2;
-              return GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: aspectRatio,
-                ),
-                itemCount: _sensorStatuses.length,
-                itemBuilder: (context, index) {
-                  final sensor = _sensorStatuses[index];
-                  return _SensorStatusCard(sensor: sensor);
-                },
-              );
-            },
-          ),
+          _buildSensorSection(latestAsync),
           const SizedBox(height: 32),
           _SectionHeader(
             title: 'Kontrol lingkungan',
@@ -133,9 +123,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 900;
-              final pumpCard = _PumpStatusCard(
-                pumpOn: _pumpOn,
-                onChanged: (value) => setState(() => _pumpOn = value),
+              final pumpCard = _buildPumpCard(
+                statusAsync,
+                pumpAsync,
+                ackAsync,
+                controlModeAsync,
               );
               const tipsCard = _CultivationTipsCard();
               if (isWide) {
@@ -175,7 +167,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       Theme.of(context)
                           .colorScheme
                           .primaryContainer
-                          .withOpacity(0.45),
+                          .withAlpha((255 * 0.45).round()),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
@@ -191,6 +183,332 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSensorSection(AsyncValue<SensorSnapshot?> latestAsync) {
+    return latestAsync.when(
+      data: (data) {
+        if (data == null) {
+          return const _SectionMessageCard(
+            icon: Icons.sensors_off,
+            message:
+                'Belum ada data sensor dari perangkat. Pastikan simulasi Wokwi berjalan dan node terhubung ke Firebase.',
+          );
+        }
+        final sensors = _sensorStatusesFromData(data);
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final width = constraints.maxWidth;
+            final columns = width >= 1100
+                ? 4
+                : width >= 800
+                    ? 3
+                    : width >= 520
+                        ? 2
+                        : 1;
+            final aspectRatio = width >= 1100
+                ? 2.2
+                : width >= 800
+                    ? 1.6
+                    : width >= 520
+                        ? 1.35
+                        : 1.2;
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: aspectRatio,
+              ),
+              itemCount: sensors.length,
+              itemBuilder: (context, index) {
+                final sensor = sensors[index];
+                return _SensorStatusCard(sensor: sensor);
+              },
+            );
+          },
+        );
+      },
+      loading: () => const _SectionLoadingCard(
+        message: 'Mengambil data sensor dari Firebase...',
+      ),
+      error: (error, _) => _SectionMessageCard(
+        icon: Icons.error_outline,
+        message: 'Gagal memuat data sensor: $error',
+      ),
+    );
+  }
+
+  Widget _buildPumpCard(
+    AsyncValue<DeviceStatusData?> statusAsync,
+    AsyncValue<PumpStatusData?> pumpAsync,
+    AsyncValue<CommandAck?> ackAsync,
+    AsyncValue<ControlMode> controlModeAsync,
+  ) {
+    final status = statusAsync.valueOrNull;
+    final pump = pumpAsync.valueOrNull;
+    final ack = ackAsync.valueOrNull;
+    final controlMode = controlModeAsync.valueOrNull ?? ControlMode.auto;
+    final pumpError = _errorOrNull(pumpAsync) ?? _errorOrNull(statusAsync);
+
+    if (pumpAsync.isLoading && pump == null) {
+      return const _SectionLoadingCard(
+        message: 'Mengambil status pompa dari Firebase...',
+      );
+    }
+
+    if (pump == null) {
+      if (pumpError != null) {
+        return _SectionMessageCard(
+          icon: Icons.error_outline,
+          message: 'Gagal memuat status pompa: $pumpError',
+        );
+      }
+      return const _SectionMessageCard(
+        icon: Icons.sensors,
+        message: 'Menunggu perangkat melaporkan status pompa.',
+      );
+    }
+
+    final runtimeLabel = _pumpRuntimeLabel(status, pump);
+
+    return _PumpStatusCard(
+      status: status,
+      pump: pump,
+      controlMode: controlMode,
+      systemAck: ack,
+      runtimeLabel: runtimeLabel,
+      isSendingPump: _isSendingPumpCommand,
+      isUpdatingMode: _isUpdatingControlMode,
+      onPumpToggle: (value) => _handlePumpToggle(value, controlMode, status),
+      onModeChange: _setControlMode,
+      onRefresh: _refreshRealtimeFeeds,
+    );
+  }
+
+  List<_SensorStatus> _sensorStatusesFromData(SensorSnapshot data) {
+    final soilPercent = data.soilMoisturePercent;
+    final lightPercent = data.lightIntensity == null
+        ? null
+        : (data.lightIntensity!.clamp(0, 4095) / 4095) * 100;
+
+    String lightStatus;
+    if (lightPercent == null) {
+      lightStatus = 'Menunggu data cahaya dari sensor LDR.';
+    } else if (lightPercent < 40) {
+      lightStatus = 'Intensitas rendah, tingkatkan grow light.';
+    } else if (lightPercent > 85) {
+      lightStatus = 'Sangat terang, pertimbangkan menurunkan intensitas.';
+    } else {
+      lightStatus = 'Cahaya stabil untuk fase vegetatif.';
+    }
+
+    return [
+      _SensorStatus(
+        title: 'Suhu',
+        module: 'Wokwi DHT22',
+        value: data.temperature != null
+            ? '${data.temperature!.toStringAsFixed(1)} deg C'
+            : '—',
+        status: _describeRange(
+          data.temperature,
+          min: 24,
+          max: 28,
+          low: 'Di bawah target siang (24-28 deg C).',
+          high: 'Lebih panas dari target, cek exhaust.',
+          ok: 'Suhu berada di rentang ideal.',
+        ),
+        range: '24-28 deg C',
+        icon: Icons.thermostat,
+        color: const Color(0xFFFFB74D),
+      ),
+      _SensorStatus(
+        title: 'Cahaya',
+        module: 'Wokwi LDR',
+        value: data.lightIntensity == null
+            ? '—'
+            : '${data.lightIntensity} ADC (${lightPercent!.toStringAsFixed(0)}%)',
+        status: lightStatus,
+        range: '15-20k lux',
+        icon: Icons.light_mode,
+        color: const Color(0xFFFFF176),
+      ),
+      _SensorStatus(
+        title: 'Kelembapan udara',
+        module: 'Wokwi DHT22',
+        value: data.humidity != null
+            ? '${data.humidity!.toStringAsFixed(0)} %'
+            : '—',
+        status: _describeRange(
+          data.humidity,
+          min: 55,
+          max: 70,
+          low: 'Humidifier siap dinyalakan (di bawah 55%).',
+          high: 'Kelembapan tinggi, aktifkan exhaust.',
+          ok: 'Kelembapan nyaman untuk stroberi.',
+        ),
+        range: '55-70 %',
+        icon: Icons.water_drop,
+        color: const Color(0xFF4FC3F7),
+      ),
+      _SensorStatus(
+        title: 'Kelembapan tanah',
+        module: 'Wokwi Soil',
+        value: soilPercent != null
+            ? '${soilPercent.toStringAsFixed(0)} %'
+            : '—',
+        status: _describeRange(
+          soilPercent,
+          min: 35,
+          max: 45,
+          low: 'Tanah kering, fuzzy logic siap menjadwalkan siram.',
+          high: 'Media lembap, tunda penyiraman.',
+          ok: 'Tanah berada di zona ideal (35-45%).',
+        ),
+        range: '35-45 %',
+        icon: Icons.grass,
+        color: const Color(0xFF81C784),
+      ),
+    ];
+  }
+
+  String _describeRange(
+    double? value, {
+    required double min,
+    required double max,
+    required String low,
+    required String high,
+    required String ok,
+  }) {
+    if (value == null) {
+      return 'Menunggu data sensor dari node ESP32.';
+    }
+    if (value < min) return low;
+    if (value > max) return high;
+    return ok;
+  }
+
+  Duration? _pumpRuntime(
+    DeviceStatusData? status,
+    PumpStatusData? pump,
+  ) {
+    final uptime = status?.uptimeMillis;
+    final lastChange = pump?.lastChangeMillis;
+    if (uptime == null || lastChange == null) {
+      return null;
+    }
+    final diff = uptime - lastChange;
+    if (diff < 0) {
+      return null;
+    }
+    return Duration(milliseconds: diff);
+  }
+
+  String? _pumpRuntimeLabel(DeviceStatusData? status, PumpStatusData? pump) {
+    final runtime = _pumpRuntime(status, pump);
+    if (runtime == null) {
+      return null;
+    }
+    final formatted = _formatDuration(runtime);
+    if (pump?.isOn == true) {
+      return 'Pompa aktif selama $formatted';
+    }
+    return 'Pompa berhenti $formatted lalu';
+  }
+
+  String _formatDuration(Duration duration) {
+    if (duration.inHours >= 1) {
+      final minutes = duration.inMinutes % 60;
+      return '${duration.inHours} jam $minutes mnt';
+    }
+    if (duration.inMinutes >= 1) {
+      final seconds = duration.inSeconds % 60;
+      return '${duration.inMinutes} mnt $seconds dtk';
+    }
+    return '${duration.inSeconds} dtk';
+  }
+
+  Object? _errorOrNull<T>(AsyncValue<T> value) {
+    return value.maybeWhen(
+      error: (error, _) => error,
+      orElse: () => null,
+    );
+  }
+
+  void _refreshRealtimeFeeds() {
+    ref.invalidate(latestTelemetryProvider);
+    ref.invalidate(deviceStatusProvider);
+    ref.invalidate(pumpStatusProvider);
+    ref.invalidate(systemAckProvider);
+    ref.invalidate(controlModeProvider);
+    _showSnackBar('Sinkronisasi data Firebase dimulai...');
+  }
+
+  Future<void> _handlePumpToggle(
+    bool desiredState,
+    ControlMode mode,
+    DeviceStatusData? status,
+  ) async {
+    if (_isSendingPumpCommand) {
+      return;
+    }
+
+    if (desiredState && mode != ControlMode.manual) {
+      _showSnackBar(
+        'Aktifkan mode manual terlebih dahulu sebelum menyalakan pompa.',
+        isError: true,
+      );
+      return;
+    }
+
+    setState(() => _isSendingPumpCommand = true);
+    try {
+      await ref.read(dashboardRepositoryProvider).sendPumpCommand(
+            turnOn: desiredState,
+            durationSeconds: desiredState ? 30 : 0,
+          );
+      final suffix = status?.online == true
+          ? ''
+          : ' (node offline - perintah akan dijalankan saat online)';
+      _showSnackBar('Perintah pompa dikirim$suffix');
+    } catch (e) {
+      _showSnackBar('Gagal mengirim perintah: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isSendingPumpCommand = false);
+      }
+    }
+  }
+
+  Future<void> _setControlMode(ControlMode mode) async {
+    if (_isUpdatingControlMode) {
+      return;
+    }
+    setState(() => _isUpdatingControlMode = true);
+    try {
+      await ref.read(dashboardRepositoryProvider).setControlMode(mode);
+      _showSnackBar('Mode kontrol diubah ke ${mode.label}.');
+    } catch (e) {
+      _showSnackBar('Gagal memperbarui mode: $e', isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _isUpdatingControlMode = false);
+      }
+    }
+  }
+
+  void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor:
+            isError ? theme.colorScheme.error : theme.colorScheme.primary,
       ),
     );
   }
@@ -220,8 +538,8 @@ class _DashboardAppBar extends StatelessWidget {
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: Theme.of(context)
                           .colorScheme
-                          .onSurfaceVariant
-                          .withOpacity(0.7),
+                      .onSurfaceVariant
+                      .withAlpha((255 * 0.7).round()),
                     ),
               ),
               Text(
@@ -312,7 +630,7 @@ class _HeroChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withAlpha((255 * 0.2).round()),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white30),
       ),
@@ -381,8 +699,8 @@ class _SensorStatusCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(22),
           gradient: LinearGradient(
             colors: [
-              sensor.color.withOpacity(0.12),
-              sensor.color.withOpacity(0.04),
+              sensor.color.withAlpha((255 * 0.12).round()),
+              sensor.color.withAlpha((255 * 0.04).round()),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -453,13 +771,39 @@ class _SensorStatusCard extends StatelessWidget {
 }
 
 class _PumpStatusCard extends StatelessWidget {
-  const _PumpStatusCard({required this.pumpOn, required this.onChanged});
+  const _PumpStatusCard({
+    required this.status,
+    required this.pump,
+    required this.controlMode,
+    required this.systemAck,
+    required this.runtimeLabel,
+    required this.isSendingPump,
+    required this.isUpdatingMode,
+    required this.onPumpToggle,
+    required this.onModeChange,
+    required this.onRefresh,
+  });
 
-  final bool pumpOn;
-  final ValueChanged<bool> onChanged;
+  final DeviceStatusData? status;
+  final PumpStatusData pump;
+  final ControlMode controlMode;
+  final CommandAck? systemAck;
+  final String? runtimeLabel;
+  final bool isSendingPump;
+  final bool isUpdatingMode;
+  final ValueChanged<bool> onPumpToggle;
+  final ValueChanged<ControlMode> onModeChange;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final online = status?.online ?? false;
+    final wifi = status?.wifiSignalStrength;
+    final autoLogic = status?.autoLogicEnabled ?? false;
+    final canTogglePump = !isSendingPump;
+
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       child: Padding(
@@ -471,50 +815,108 @@ class _PumpStatusCard extends StatelessWidget {
               children: [
                 Icon(
                   Icons.water_drop_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: colorScheme.primary,
                 ),
                 const SizedBox(width: 8),
                 Text(
                   'Pompa nutrisi',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const Spacer(),
                 Switch.adaptive(
-                  value: pumpOn,
-                  onChanged: onChanged,
+                  value: pump.isOn,
+                  onChanged: canTogglePump ? onPumpToggle : null,
                 ),
               ],
             ),
             const SizedBox(height: 12),
             Text(
-              pumpOn
+              pump.isOn
                   ? 'Status: ON - Nutrisi sedang dialirkan ke bedengan.'
                   : 'Status: OFF - Pompa siap dijalankan otomatis.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: Colors.grey[700]),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: Colors.grey[700],
+              ),
+            ),
+            if (runtimeLabel != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                runtimeLabel!,
+                style: theme.textTheme.labelMedium,
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'Mode kontrol: ${controlMode.label} (${controlMode == ControlMode.auto ? 'fuzzy logic aktif' : 'manual override'})',
+              style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
-            Row(
+            SegmentedButton<ControlMode>(
+              segments: const [
+                ButtonSegment(
+                  value: ControlMode.auto,
+                  icon: Icon(Icons.smart_toy_outlined),
+                  label: Text('Auto'),
+                ),
+                ButtonSegment(
+                  value: ControlMode.manual,
+                  icon: Icon(Icons.touch_app_outlined),
+                  label: Text('Manual'),
+                ),
+              ],
+              selected: {controlMode},
+              onSelectionChanged: isUpdatingMode
+                  ? null
+                  : (selection) {
+                      final target = selection.first;
+                      if (target != controlMode) {
+                        onModeChange(target);
+                      }
+                    },
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
-                const Icon(Icons.timer_outlined, size: 16),
-                const SizedBox(width: 6),
-                Text(
-                  'Jadwal berikutnya - 14:30 WIB',
-                  style: Theme.of(context).textTheme.labelMedium,
+                _InfoPill(
+                  icon: online ? Icons.check_circle : Icons.error_outline,
+                  label: online ? 'Perangkat online' : 'Perangkat offline',
+                  background:
+                      (online ? Colors.green : Colors.red).withAlpha((255 * 0.12).round()),
+                  foreground: online ? Colors.green[800]! : Colors.red[700]!,
+                ),
+                if (wifi != null)
+                  _InfoPill(
+                    icon: Icons.wifi_tethering,
+                    label: '$wifi dBm WiFi',
+                    background: colorScheme.primary.withAlpha((255 * 0.1).round()),
+                    foreground: colorScheme.primary,
+                  ),
+                _InfoPill(
+                  icon: Icons.auto_awesome,
+                  label: autoLogic ? 'Fuzzy logic aktif' : 'Fuzzy logic off',
+                  background: autoLogic
+                      ? colorScheme.secondaryContainer.withAlpha((255 * 0.3).round())
+                      : Colors.grey.withAlpha((255 * 0.15).round()),
+                  foreground: autoLogic
+                      ? colorScheme.secondary
+                      : Colors.grey[700]!,
                 ),
               ],
             ),
             const SizedBox(height: 16),
             FilledButton.tonalIcon(
-              onPressed: () {},
+              onPressed: onRefresh,
               icon: const Icon(Icons.sync),
               label: const Text('Sinkronkan dengan Wokwi'),
             ),
+            if (systemAck != null && systemAck!.message.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _AckBanner(ack: systemAck!),
+            ],
           ],
         ),
       ),
@@ -617,8 +1019,154 @@ class _TipTile extends StatelessWidget {
   }
 }
 
+class _SectionLoadingCard extends StatelessWidget {
+  const _SectionLoadingCard({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            const SizedBox(
+              height: 28,
+              width: 28,
+              child: CircularProgressIndicator(strokeWidth: 3),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionMessageCard extends StatelessWidget {
+  const _SectionMessageCard({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: Theme.of(context).colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({
+    required this.icon,
+    required this.label,
+    required this.background,
+    required this.foreground,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color background;
+  final Color foreground;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: foreground),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: foreground, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AckBanner extends StatelessWidget {
+  const _AckBanner({required this.ack});
+
+  final CommandAck ack;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final success = ack.isSuccess;
+    final color = success ? theme.colorScheme.primary : theme.colorScheme.error;
+    final background = success
+      ? theme.colorScheme.primaryContainer.withAlpha((255 * 0.4).round())
+      : theme.colorScheme.errorContainer.withAlpha((255 * 0.4).round());
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(success ? Icons.check_circle : Icons.error_outline, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              ack.message.isEmpty
+                  ? 'Perintah terakhir telah diproses.'
+                  : ack.message,
+              style: theme.textTheme.bodySmall?.copyWith(color: color),
+            ),
+          ),
+          Text(
+            ack.status.toUpperCase(),
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _SensorStatus {
-  const _SensorStatus({
+  _SensorStatus({
     required this.title,
     required this.module,
     required this.value,
@@ -636,45 +1184,6 @@ class _SensorStatus {
   final IconData icon;
   final Color color;
 }
-
-const List<_SensorStatus> _sensorStatuses = [
-  _SensorStatus(
-    title: 'Suhu',
-    module: 'Wokwi DHT22',
-    value: '26.4 deg C',
-    status: 'Stabil - Target siang 27 deg C',
-    range: '24-28 deg C',
-    icon: Icons.thermostat,
-    color: Color(0xFFFFB74D),
-  ),
-  _SensorStatus(
-    title: 'Cahaya',
-    module: 'Wokwi LDR',
-    value: '18.700 lux',
-    status: 'Grow light aktif 80%',
-    range: '15-20k lux',
-    icon: Icons.light_mode,
-    color: Color(0xFFFFF176),
-  ),
-  _SensorStatus(
-    title: 'Kelembapan udara',
-    module: 'Wokwi DHT22',
-    value: '62%',
-    status: 'Fogger standby',
-    range: '55-70%',
-    icon: Icons.water_drop,
-    color: Color(0xFF4FC3F7),
-  ),
-  _SensorStatus(
-    title: 'Kelembapan tanah',
-    module: 'Wokwi Soil',
-    value: '41%',
-    status: 'Drip system siap dijalankan',
-    range: '35-45%',
-    icon: Icons.grass,
-    color: Color(0xFF81C784),
-  ),
-];
 
 extension on Color {
   Color darken([double amount = .1]) {
