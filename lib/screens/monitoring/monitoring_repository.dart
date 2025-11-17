@@ -172,6 +172,7 @@ class HistoricalReading {
 
   /// Parse timestamp from separate date and time keys.
   /// Example: parentKey="2025-11-16", currentKey="20:59:54"
+  /// Assumes data is in UTC+7 (WIB - Waktu Indonesia Barat) and converts to local time.
   static int _parseFromDateTimeKeys(String dateKey, String timeKey) {
     try {
       // Parse date (YYYY-MM-DD)
@@ -192,8 +193,13 @@ class HistoricalReading {
       final minute = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
       final second = timeParts.length > 2 ? (int.tryParse(timeParts[2]) ?? 0) : 0;
       
-      final dateTime = DateTime(year, month, day, hour, minute, second);
-      return dateTime.millisecondsSinceEpoch;
+      // Create DateTime in UTC+7 (WIB timezone)
+      // UTC+7 is 7 hours ahead of UTC
+      final wibDateTime = DateTime.utc(year, month, day, hour, minute, second).subtract(const Duration(hours: 7));
+      
+      // Convert to local time
+      final localDateTime = wibDateTime.toLocal();
+      return localDateTime.millisecondsSinceEpoch;
     } catch (e) {
       return 0;
     }
@@ -205,12 +211,13 @@ class HistoricalReading {
       final parsed = int.tryParse(id);
       if (parsed != null) return parsed;
       
-      // Try to parse date/time format: "2024-11-17/14:30:45"
+      // Try to parse date/time format: "2024-11-17/14:30:45" or nested paths
       if (id.contains('/')) {
         final parts = id.split('/');
         if (parts.length >= 2) {
-          final datePart = parts[0];
-          final timePart = parts.length > 2 ? parts.last : parts[1];
+          // Get the last two parts which should be date and time
+          final datePart = parts.length > 2 ? parts[parts.length - 2] : parts[0];
+          final timePart = parts.last;
           
           // Parse date (YYYY-MM-DD)
           final dateParts = datePart.split('-');
@@ -225,8 +232,10 @@ class HistoricalReading {
             final minute = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
             final second = timeParts.length > 2 ? (int.tryParse(timeParts[2]) ?? 0) : 0;
             
-            final dateTime = DateTime(year, month, day, hour, minute, second);
-            return dateTime.millisecondsSinceEpoch;
+            // Assume UTC+7 and convert to local
+            final wibDateTime = DateTime.utc(year, month, day, hour, minute, second).subtract(const Duration(hours: 7));
+            final localDateTime = wibDateTime.toLocal();
+            return localDateTime.millisecondsSinceEpoch;
           }
         }
       }

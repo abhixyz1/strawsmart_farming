@@ -28,29 +28,11 @@ class MonitoringScreen extends ConsumerWidget {
         ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? const _ShimmerLoadingState()
           : error != null && readings.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        child: Text(
-                          'Gagal memuat data: $error',
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: () => ref.invalidate(historicalReadingsProvider),
-                        icon: const Icon(Icons.refresh),
-                        label: const Text('Coba Lagi'),
-                      ),
-                    ],
-                  ),
+              ? _ErrorStateWidget(
+                  error: error,
+                  onRetry: () => ref.invalidate(historicalReadingsProvider),
                 )
               : readings.isEmpty
                   ? const _EmptyStateWidget()
@@ -889,6 +871,175 @@ class _EmptyStateWidget extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ErrorStateWidget extends StatelessWidget {
+  const _ErrorStateWidget({required this.error, required this.onRetry});
+
+  final Object error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.cloud_off_outlined,
+                size: 64,
+                color: Theme.of(context).colorScheme.error,
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Gagal Memuat Data',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba Lagi'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShimmerLoadingState extends StatefulWidget {
+  const _ShimmerLoadingState();
+
+  @override
+  State<_ShimmerLoadingState> createState() => _ShimmerLoadingStateState();
+}
+
+class _ShimmerLoadingStateState extends State<_ShimmerLoadingState>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat();
+    _animation = Tween<double>(begin: -2, end: 2).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Shimmer summary cards
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth >= 800;
+              final shimmerCards = List.generate(4, (index) => _ShimmerCard(animation: _animation));
+              
+              if (isWide) {
+                return Row(
+                  children: shimmerCards
+                      .map((card) => Expanded(
+                            child: Padding(
+                              padding: const EdgeInsets.only(right: 16),
+                              child: card,
+                            ),
+                          ))
+                      .toList(),
+                );
+              }
+              
+              return Column(
+                children: shimmerCards
+                    .map((card) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: card,
+                        ))
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 32),
+          _ShimmerCard(animation: _animation, height: 300),
+          const SizedBox(height: 24),
+          _ShimmerCard(animation: _animation, height: 300),
+        ],
+      ),
+    );
+  }
+}
+
+class _ShimmerCard extends StatelessWidget {
+  const _ShimmerCard({required this.animation, this.height = 120});
+
+  final Animation<double> animation;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, child) {
+        return Container(
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+                Theme.of(context).colorScheme.surfaceContainerHigh,
+                Theme.of(context).colorScheme.surfaceContainerHighest,
+              ],
+              stops: [
+                (animation.value - 1).clamp(0.0, 1.0),
+                animation.value.clamp(0.0, 1.0),
+                (animation.value + 1).clamp(0.0, 1.0),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

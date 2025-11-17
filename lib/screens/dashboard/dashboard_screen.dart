@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../auth/user_profile_repository.dart';
 import '../monitoring/monitoring_screen.dart';
 import '../profile/profile_screen.dart';
+import '../logs/logs_screen.dart';
 import '../../core/widgets/app_shell.dart';
 import 'dashboard_repository.dart';
 
@@ -98,16 +99,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return const MonitoringScreen();
     }
 
-    // Tab lain yang belum diimplementasi (Laporan)
-    if (_selectedIndex != 0) {
-      return Center(
-        child: Text(
-          '$sectionTitle akan tersedia segera.',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-      );
+    // Tab Laporan (index 2)
+    if (_selectedIndex == 2) {
+      return const LaporanScreen();
     }
 
+    // Tab Beranda (index 0)
     final profileAsync = ref.watch(currentUserProfileProvider);
     final displayName = profileAsync.when<String?>(
       data: (profile) => profile?.name,
@@ -234,7 +231,34 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Show data (cached or fresh)
     final sensors = _sensorStatusesFromData(data!);
-    return LayoutBuilder(
+    final lastUpdated = data.timestampMillis != null 
+        ? _formatTimeAgo(DateTime.fromMillisecondsSinceEpoch(data.timestampMillis!)) 
+        : null;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (lastUpdated != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.access_time,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Terakhir diperbarui $lastUpdated',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final columns = width >= 1100
@@ -270,7 +294,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               },
             );
           },
-        );
+        ),
+      ],
+    );
   }
 
   Widget _buildPumpCard(
@@ -466,6 +492,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return '${duration.inMinutes} mnt $seconds dtk';
     }
     return '${duration.inSeconds} dtk';
+  }
+
+  String _formatTimeAgo(DateTime dateTime) {
+    final now = DateTime.now();
+    final difference = now.difference(dateTime);
+
+    if (difference.inSeconds < 60) {
+      return '${difference.inSeconds} detik lalu';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes} menit lalu';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours} jam lalu';
+    } else if (difference.inDays == 1) {
+      return 'kemarin';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays} hari lalu';
+    } else {
+      return 'lebih dari seminggu lalu';
+    }
   }
 
   Object? _errorOrNull<T>(AsyncValue<T> value) {
