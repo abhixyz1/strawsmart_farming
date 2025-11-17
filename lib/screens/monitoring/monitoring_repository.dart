@@ -41,6 +41,7 @@ class MonitoringRepository {
   }
 
   /// Recursively parse history map to handle both flat and nested structures.
+  /// For nested date/time keys like "2025-11-16/20:59:54", the prefix carries the date part.
   void _parseHistoryMap(Map data, List<HistoricalReading> readings, {String prefix = ''}) {
     data.forEach((key, value) {
       if (value is Map) {
@@ -57,6 +58,8 @@ class MonitoringRepository {
             final reading = HistoricalReading.fromJson(
               id,
               _castToStringDynamicMap(value),
+              parentKey: prefix,
+              currentKey: key.toString(),
             );
             readings.add(reading);
           } catch (e) {
@@ -98,6 +101,8 @@ class MonitoringRepository {
             final reading = HistoricalReading.fromJson(
               key.toString(),
               _castToStringDynamicMap(value),
+              parentKey: null,
+              currentKey: key.toString(),
             );
             readings.add(reading);
           } catch (e) {
@@ -131,16 +136,26 @@ class HistoricalReading {
   final double? soilMoisturePercent;
   final double? lightIntensity;
 
-  factory HistoricalReading.fromJson(String id, Map<String, dynamic> json) {
-    // Try to get timestamp from various possible fields
+  factory HistoricalReading.fromJson(
+    String id,
+    Map<String, dynamic> json, {
+    String? parentKey,
+    String? currentKey,
+  }) {
+    // Priority 1: Use timestamp field if present
     int timestampMillis = _asInt(json['timestamp']) ?? 0;
     
-    // If timestamp is 0, try to parse from the id (might be date/time string)
+    // Priority 2: Build from parent date key + current time key
+    if (timestampMillis == 0 && parentKey != null && currentKey != null) {
+      timestampMillis = _parseFromDateTimeKeys(parentKey, currentKey);
+    }
+    
+    // Priority 3: Parse from combined id string
     if (timestampMillis == 0) {
       timestampMillis = _parseTimestampFromId(id);
     }
     
-    // Fallback to current time if still 0
+    // Fallback to current time if all else fails
     if (timestampMillis == 0) {
       timestampMillis = DateTime.now().millisecondsSinceEpoch;
     }
@@ -153,6 +168,35 @@ class HistoricalReading {
       soilMoisturePercent: _asDouble(json['soilMoisturePercent']),
       lightIntensity: _asDouble(json['lightIntensity'] ?? json['light']),
     );
+  }
+
+  /// Parse timestamp from separate date and time keys.
+  /// Example: parentKey="2025-11-16", currentKey="20:59:54"
+  static int _parseFromDateTimeKeys(String dateKey, String timeKey) {
+    try {
+      // Parse date (YYYY-MM-DD)
+      final dateParts = dateKey.split('-');
+      if (dateParts.length != 3) return 0;
+      
+      final year = int.tryParse(dateParts[0]) ?? 0;
+      final month = int.tryParse(dateParts[1]) ?? 0;
+      final day = int.tryParse(dateParts[2]) ?? 0;
+      
+      if (year == 0 || month == 0 || day == 0) return 0;
+      
+      // Parse time (HH:mm:ss)
+      final timeParts = timeKey.split(':');
+      if (timeParts.isEmpty) return 0;
+      
+      final hour = timeParts.isNotEmpty ? (int.tryParse(timeParts[0]) ?? 0) : 0;
+      final minute = timeParts.length > 1 ? (int.tryParse(timeParts[1]) ?? 0) : 0;
+      final second = timeParts.length > 2 ? (int.tryParse(timeParts[2]) ?? 0) : 0;
+      
+      final dateTime = DateTime(year, month, day, hour, minute, second);
+      return dateTime.millisecondsSinceEpoch;
+    } catch (e) {
+      return 0;
+    }
   }
 
   static int _parseTimestampFromId(String id) {
