@@ -144,10 +144,15 @@ class DashboardScreen extends ConsumerWidget {
                         ),
                         const SizedBox(height: 20),
                         Wrap(
-                          spacing: 18,
-                          runSpacing: 18,
+                          spacing: 12,
+                          runSpacing: 12,
                           children: stats
-                              .map((data) => _StatCard(data: data))
+                              .map(
+                                (data) => SizedBox(
+                                  width: 300,       // ubah sesuai kebutuhan
+                                  child: _StatCard(data: data),
+                                ),
+                              )
                               .toList(),
                         ),
                       ],
