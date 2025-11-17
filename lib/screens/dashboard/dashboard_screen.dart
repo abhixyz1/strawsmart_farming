@@ -8,6 +8,8 @@ import '../monitoring/monitoring_screen.dart';
 import '../profile/profile_screen.dart';
 import '../logs/logs_screen.dart';
 import '../../core/widgets/app_shell.dart';
+import '../../core/widgets/schedule_status_card.dart';
+import '../../services/schedule_executor_service.dart';
 import 'dashboard_repository.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -53,6 +55,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final ackAsync = ref.watch(systemAckProvider);
     final controlModeAsync = ref.watch(controlModeProvider);
     final sectionTitle = _destinations[_selectedIndex].label;
+    
+    // Aktivasi schedule executor service
+    ref.watch(scheduleExecutorServiceProvider);
+    
     return AppShell(
       destinations: _destinations,
       selectedIndex: _selectedIndex,
@@ -126,6 +132,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
           const SizedBox(height: 16),
           _buildSensorSection(latestAsync),
+          const SizedBox(height: 32),
+          const ScheduleStatusCard(), // Kartu jadwal otomatis dengan kontrol
           const SizedBox(height: 32),
           _SectionHeader(
             title: 'Kontrol lingkungan',
@@ -625,7 +633,7 @@ class _DashboardAppBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '',
+                'StrawSmart Dashboard',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: Theme.of(context)
                           .colorScheme
@@ -642,23 +650,17 @@ class _DashboardAppBar extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          Padding(
-            padding: EdgeInsets.only(top: 25), 
-            child: IconButton(
-              tooltip: 'Notifikasi',
-              icon: const Icon(Icons.notifications_outlined),
-              onPressed: () {},
-            ),
+          IconButton(
+            tooltip: 'Notifikasi',
+            icon: const Icon(Icons.notifications_outlined),
+            onPressed: () {},
           ),
           if (onRefresh != null) ...[
             const SizedBox(width: 8),
-            Padding(
-              padding: EdgeInsets.only(top: 25), 
-              child: IconButton(
-                tooltip: 'Refresh Data',
-                icon: const Icon(Icons.refresh_rounded),
-                onPressed: onRefresh,
-              ),
+            IconButton(
+              tooltip: 'Refresh Data',
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: onRefresh,
             ),
           ],
         ],

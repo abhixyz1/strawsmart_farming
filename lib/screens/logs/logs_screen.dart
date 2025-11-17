@@ -368,7 +368,7 @@ class _NotableEventsTimeline extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final events = _generateNotableEvents(readings);
-
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -379,6 +379,7 @@ class _NotableEventsTimeline extends StatelessWidget {
               ),
         ),
         const SizedBox(height: 16),
+        
         if (events.isEmpty)
           Container(
             padding: const EdgeInsets.all(24),
@@ -396,7 +397,7 @@ class _NotableEventsTimeline extends StatelessWidget {
             ),
           )
         else
-          ...events.map((event) => _EventCard(event: event)),
+          ...events.take(5).map((event) => _EventCard(event: event)),
       ],
     );
   }
@@ -471,6 +472,7 @@ class _NotableEvent {
     required this.timestamp,
   });
 }
+
 
 class _EventCard extends StatelessWidget {
   const _EventCard({required this.event});
