@@ -1,11 +1,17 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/constants/login_constants.dart';
 import 'auth_controller.dart';
+import 'widgets/error_toast.dart';
+import 'widgets/glass_card.dart';
+import 'widgets/gradient_background.dart';
+import 'widgets/login_header.dart';
+import 'widgets/primary_button.dart';
 
+/// Login screen dengan responsive layout, keyboard handling, dan accessibility
+/// Optimized untuk fit dalam 1 viewport tanpa scroll di mobile (>=667px height)
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -18,6 +24,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailC = TextEditingController();
   final _passC = TextEditingController();
   bool _obscure = true;
+  String? _currentError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Preload background image untuk performa
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      precacheImage(
+        const AssetImage('assets/images/homestrawberry.jpg'),
+        context,
+      );
+    });
+  }
 
   @override
   void dispose() {
@@ -28,21 +47,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _currentError = null);
+    
     await ref.read(authControllerProvider.notifier).signIn(
           _emailC.text.trim(),
           _passC.text,
         );
+    
     final state = ref.read(authControllerProvider);
     state.whenOrNull(
       data: (user) {
-        if (user != null && mounted) context.go('/dashboard');
+        if (user != null && mounted) {
+          context.go('/dashboard');
+        }
+      },
+      error: (error, _) {
+        if (mounted) {
+          setState(() => _currentError = error.toString());
+        }
       },
     );
   }
 
   InputDecorationTheme _buildFieldTheme(ColorScheme colorScheme) {
     final baseBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(LoginConstants.inputBorderRadius),
       borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.16)),
     );
 
@@ -77,568 +107,331 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final authState = ref.watch(authControllerProvider);
     final loading = authState.isLoading;
-    final errMsg = authState.hasError ? '${authState.error}' : null;
+    final errMsg = authState.hasError ? '${authState.error}' : _currentError;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final size = MediaQuery.of(context).size;
+    final viewInsets = MediaQuery.of(context).viewInsets;
+    final isLandscape = LoginConstants.isLandscape(context);
+    final screenHeight = size.height;
+    
+    final verticalPadding = LoginConstants.getVerticalPadding(screenHeight);
+    final horizontalPadding = LoginConstants.getHorizontalPadding(size.width);
+    final cardPadding = LoginConstants.getCardPadding(screenHeight);
+    final spacing = LoginConstants.getSpacing(screenHeight);
 
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: Stack(
         children: [
-          const _SoftGradientBackground(),
+          const GradientBackground(),
           SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 480),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      const _HeaderBadge(),
-                      const SizedBox(height: 24),
-                      _GlassCard(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(26, 30, 26, 30),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'Masuk ke StrawSmart',
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                'Kelola rumah kaca stroberi Anda dengan insight nutrisi, suhu, dan panen yang terpusat.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurface
-                                      .withOpacity(0.7),
-                                ),
-                              ),
-                              const SizedBox(height: 22),
-                              AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 220),
-                                child: errMsg == null
-                                    ? const SizedBox.shrink()
-                                    : _ErrorToast(
-                                        key: ValueKey(errMsg),
-                                        message: errMsg,
-                                      ),
-                              ),
-                              Theme(
-                                data: theme.copyWith(
-                                  inputDecorationTheme:
-                                      _buildFieldTheme(colorScheme),
-                                ),
-                                child: AutofillGroup(
-                                  child: Form(
-                                    key: _formKey,
-                                    child: Column(
-                                      children: [
-                                        TextFormField(
-                                          controller: _emailC,
-                                          decoration: const InputDecoration(
-                                            labelText: 'Alamat email',
-                                            hintText: 'nama@email.com',
-                                            prefixIcon: Icon(
-                                              Icons.alternate_email_outlined,
-                                            ),
-                                          ),
-                                          autofillHints: const [
-                                            AutofillHints.email
-                                          ],
-                                          keyboardType:
-                                              TextInputType.emailAddress,
-                                          textInputAction: TextInputAction.next,
-                                          validator: (v) {
-                                            if (v == null ||
-                                                v.trim().isEmpty) {
-                                              return 'Email wajib diisi.';
-                                            }
-                                            final ok = RegExp(
-                                              r'^[^@]+@[^@]+\.[^@]+',
-                                            ).hasMatch(v.trim());
-                                            if (!ok) {
-                                              return 'Format email tidak valid.';
-                                            }
-                                            return null;
-                                          },
-                                          enabled: !loading,
-                                        ),
-                                        const SizedBox(height: 16),
-                                        TextFormField(
-                                          controller: _passC,
-                                          obscureText: _obscure,
-                                          decoration: InputDecoration(
-                                            labelText: 'Kata sandi',
-                                            prefixIcon: const Icon(
-                                              Icons.lock_outline,
-                                            ),
-                                            suffixIcon: IconButton(
-                                              tooltip: _obscure
-                                                  ? 'Tampilkan kata sandi'
-                                                  : 'Sembunyikan kata sandi',
-                                              onPressed: loading
-                                                  ? null
-                                                  : () => setState(
-                                                        () => _obscure =
-                                                            !_obscure,
-                                                      ),
-                                              icon: Icon(
-                                                _obscure
-                                                    ? Icons.visibility
-                                                    : Icons.visibility_off,
-                                              ),
-                                            ),
-                                          ),
-                                          autofillHints: const [
-                                            AutofillHints.password
-                                          ],
-                                          textInputAction: TextInputAction.done,
-                                          onFieldSubmitted: (_) {
-                                            if (!loading) _submit();
-                                          },
-                                          validator: (v) {
-                                            if (v == null || v.isEmpty) {
-                                              return 'Kata sandi wajib diisi.';
-                                            }
-                                            if (v.length < 6) {
-                                              return 'Minimal 6 karakter.';
-                                            }
-                                            return null;
-                                          },
-                                          enabled: !loading,
-                                        ),
-                                        const SizedBox(height: 22),
-                                        _PrimaryButton(
-                                          label: 'Login',
-                                          loadingLabel: 'Memproses...',
-                                          loading: loading,
-                                          onPressed: loading ? null : _submit,
-                                        ),
-                                        const SizedBox(height: 12),
-                                        Align(
-                                          alignment: Alignment.centerRight,
-                                          child: TextButton(
-                                            onPressed: loading
-                                                ? null
-                                                : () {
-                                                    ScaffoldMessenger.of(
-                                                            context)
-                                                        .showSnackBar(
-                                                      const SnackBar(
-                                                        content: Text(
-                                                          'Fitur reset kata sandi akan ditambahkan.',
-                                                        ),
-                                                      ),
-                                                    );
-                                                  },
-                                            child:
-                                                const Text('Lupa kata sandi?'),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Divider(
-                                color: colorScheme.outline.withOpacity(0.26),
-                              ),
-                              const SizedBox(height: 10),
-                              Text(
-                                'Belum punya akun? Hubungi admin StrawSmart untuk registrasi.',
-                                style: theme.textTheme.bodyMedium?.copyWith(
-                                  color: colorScheme.onSurface
-                                      .withOpacity(0.7),
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const _InfoStrip(),
-                    ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                // Untuk landscape atau tablet, gunakan layout horizontal
+                if (isLandscape && constraints.maxWidth > 700) {
+                  return _buildLandscapeLayout(
+                    loading: loading,
+                    errMsg: errMsg,
+                    theme: theme,
+                    colorScheme: colorScheme,
+                    cardPadding: cardPadding,
+                    spacing: spacing,
+                  );
+                }
+                
+                // Default portrait layout
+                return _buildPortraitLayout(
+                  loading: loading,
+                  errMsg: errMsg,
+                  theme: theme,
+                  colorScheme: colorScheme,
+                  verticalPadding: verticalPadding,
+                  horizontalPadding: horizontalPadding,
+                  cardPadding: cardPadding,
+                  spacing: spacing,
+                  viewInsets: viewInsets,
+                  screenHeight: screenHeight,
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Portrait layout untuk mobile
+  Widget _buildPortraitLayout({
+    required bool loading,
+    required String? errMsg,
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required double verticalPadding,
+    required double horizontalPadding,
+    required double cardPadding,
+    required double spacing,
+    required EdgeInsets viewInsets,
+    required double screenHeight,
+  }) {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: EdgeInsets.only(
+          left: horizontalPadding,
+          right: horizontalPadding,
+          top: verticalPadding,
+          bottom: viewInsets.bottom + verticalPadding,
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: LoginConstants.maxCardWidth,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const LoginHeader(),
+              SizedBox(height: spacing),
+              GlassCard(
+                child: Padding(
+                  padding: EdgeInsets.all(cardPadding),
+                  child: _buildFormContent(
+                    loading: loading,
+                    errMsg: errMsg,
+                    theme: theme,
+                    colorScheme: colorScheme,
+                    spacing: spacing,
+                    screenHeight: screenHeight,
                   ),
                 ),
               ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HeaderBadge extends StatelessWidget {
-  const _HeaderBadge();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(6),
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.14),
-            border: Border.all(color: Colors.white.withOpacity(0.35)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x22000000),
-                blurRadius: 22,
-                offset: Offset(0, 16),
-              ),
             ],
           ),
-          child: Hero(
-            tag: 'logo',
-            child: ClipOval(
-              child: Image.asset(
-                'assets/images/icon.png',
-                width: 112,
-                height: 112,
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          'StrawSmart Farming',
-          style: theme.textTheme.titleLarge?.copyWith(
-            color: Colors.white,
-            fontWeight: FontWeight.w700,
-          ),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 4),
-        Text(
-          'Satu pintu untuk memantau nutrisi, iklim, dan panen stroberi.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: Colors.white.withOpacity(0.88),
-          ),
-          textAlign: TextAlign.center,
-        ),
-      ],
-    );
-  }
-}
-
-class _GlassCard extends StatelessWidget {
-  const _GlassCard({required this.child});
-
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(24),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.96),
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.7)),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x26000000),
-                blurRadius: 28,
-                offset: Offset(0, 18),
-              ),
-            ],
-          ),
-          child: child,
         ),
       ),
     );
   }
-}
 
-class _InfoStrip extends StatelessWidget {
-  const _InfoStrip();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        color: Colors.white.withOpacity(0.08),
-        border: Border.all(color: Colors.white.withOpacity(0.22)),
-      ),
-      child: Row(
-        children: const [
-          _InfoItem(
-            icon: Icons.eco_outlined,
-            title: '96%',
-            subtitle: 'Kesehatan tanaman',
-          ),
-          SizedBox(width: 12),
-          _InfoItem(
-            icon: Icons.water_drop_outlined,
-            title: 'Optimal',
-            subtitle: 'Nutrisi & irigasi',
-          ),
-          SizedBox(width: 12),
-          _InfoItem(
-            icon: Icons.bolt_outlined,
-            title: '24/7',
-            subtitle: 'Monitoring aktif',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _InfoItem extends StatelessWidget {
-  const _InfoItem({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+  /// Landscape layout untuk tablet/desktop
+  Widget _buildLandscapeLayout({
+    required bool loading,
+    required String? errMsg,
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required double cardPadding,
+    required double spacing,
+  }) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: LoginConstants.maxLayoutWidth,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
             children: [
-              const Icon(Icons.circle, size: 0), // menjaga tinggi Row
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 6),
-              Text(
-                title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+              // Left side - Header
+              Expanded(
+                child: Center(
+                  child: const LoginHeader(),
+                ),
+              ),
+              const SizedBox(width: 32),
+              // Right side - Form
+              Expanded(
+                child: GlassCard(
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.all(cardPadding),
+                    child: _buildFormContent(
+                      loading: loading,
+                      errMsg: errMsg,
+                      theme: theme,
+                      colorScheme: colorScheme,
+                      spacing: spacing,
+                      screenHeight: 900, // Medium size for landscape
+                    ),
+                  ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.78),
-              fontSize: 12,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
-}
 
-class _SoftGradientBackground extends StatelessWidget {
-  const _SoftGradientBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
+  /// Form content yang digunakan di kedua layout
+  Widget _buildFormContent({
+    required bool loading,
+    required String? errMsg,
+    required ThemeData theme,
+    required ColorScheme colorScheme,
+    required double spacing,
+    required double screenHeight,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Image.asset(
-          'assets/images/homestrawberry.jpg',
-          fit: BoxFit.cover,
-        ),
-        Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xEE0F2027),
-                Color(0xCC203A43),
-                Color(0xDD2C5364),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+        Text(
+          'Masuk ke StrawSmart',
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
           ),
         ),
-        Positioned(
-          top: -60,
-          right: -20,
-          child: _GlowBlob(
-            size: 220,
-            color: const Color(0xFF5EFCE8).withOpacity(0.45),
+        SizedBox(height: spacing * 0.5),
+        Text(
+          'Kelola rumah kaca stroberi Anda dengan insight nutrisi, suhu, dan panen yang terpusat.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: colorScheme.onSurface.withOpacity(0.7),
           ),
         ),
-        Positioned(
-          bottom: -40,
-          left: -30,
-          child: _GlowBlob(
-            size: 260,
-            color: const Color(0xFF736EFE).withOpacity(0.4),
-          ),
+        SizedBox(height: spacing),
+        // Error toast
+        AnimatedSwitcher(
+          duration: LoginConstants.mediumDuration,
+          child: errMsg == null
+              ? const SizedBox.shrink()
+              : ErrorToast(
+                  key: ValueKey(errMsg),
+                  message: errMsg,
+                  onDismiss: () {
+                    if (mounted) {
+                      setState(() => _currentError = null);
+                    }
+                  },
+                ),
         ),
-      ],
-    );
-  }
-}
-
-class _GlowBlob extends StatelessWidget {
-  const _GlowBlob({
-    required this.size,
-    required this.color,
-    this.intensity = 0.04,
-  });
-
-  final double size;
-  final Color color;
-  final double intensity;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [
-              color,
-              color.withOpacity(intensity),
-            ],
+        // Form fields
+        Theme(
+          data: theme.copyWith(
+            inputDecorationTheme: _buildFieldTheme(colorScheme),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({
-    required this.label,
-    required this.loadingLabel,
-    required this.loading,
-    required this.onPressed,
-  });
-
-  final String label;
-  final String loadingLabel;
-  final bool loading;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-          fontSize: 16,
-          color: Colors.white,
-        );
-
-    return SizedBox(
-      height: 48,
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: loading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          padding: EdgeInsets.zero,
-          elevation: 0,
-          backgroundColor: Colors.transparent,
-          shadowColor: Colors.transparent,
-        ),
-        child: Ink(
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              colors: [Color(0xFFB31217), Color(0xFFED213A)],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: loading
-                  ? Row(
-                      key: const ValueKey('loading'),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+          child: AutofillGroup(
+            child: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  // Email field
+                  Semantics(
+                    label: 'Alamat email',
+                    textField: true,
+                    child: TextFormField(
+                      controller: _emailC,
+                      decoration: const InputDecoration(
+                        labelText: 'Alamat email',
+                        hintText: 'nama@email.com',
+                        prefixIcon: Icon(Icons.alternate_email_outlined),
+                      ),
+                      autofillHints: const [AutofillHints.email],
+                      keyboardType: TextInputType.emailAddress,
+                      textInputAction: TextInputAction.next,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Email wajib diisi.';
+                        }
+                        final ok = RegExp(r'^[^@]+@[^@]+\.[^@]+')
+                            .hasMatch(v.trim());
+                        if (!ok) {
+                          return 'Format email tidak valid.';
+                        }
+                        return null;
+                      },
+                      enabled: !loading,
+                    ),
+                  ),
+                  SizedBox(height: spacing),
+                  // Password field
+                  Semantics(
+                    label: 'Kata sandi',
+                    textField: true,
+                    obscured: _obscure,
+                    child: TextFormField(
+                      controller: _passC,
+                      obscureText: _obscure,
+                      decoration: InputDecoration(
+                        labelText: 'Kata sandi',
+                        prefixIcon: const Icon(Icons.lock_outline),
+                        suffixIcon: IconButton(
+                          tooltip: _obscure
+                              ? 'Tampilkan kata sandi'
+                              : 'Sembunyikan kata sandi',
+                          onPressed: loading
+                              ? null
+                              : () => setState(() => _obscure = !_obscure),
+                          icon: Icon(
+                            _obscure
+                                ? Icons.visibility
+                                : Icons.visibility_off,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Text(loadingLabel, style: textStyle),
-                      ],
-                    )
-                  : Row(
-                      key: const ValueKey('idle'),
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.login_rounded,
-                            color: Colors.white, size: 20),
-                        const SizedBox(width: 10),
-                        Text(label, style: textStyle),
-                      ],
+                      ),
+                      autofillHints: const [AutofillHints.password],
+                      textInputAction: TextInputAction.done,
+                      onFieldSubmitted: (_) {
+                        if (!loading) _submit();
+                      },
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Kata sandi wajib diisi.';
+                        }
+                        if (v.length < 6) {
+                          return 'Minimal 6 karakter.';
+                        }
+                        return null;
+                      },
+                      enabled: !loading,
                     ),
+                  ),
+                  SizedBox(height: spacing),
+                  // Login button
+                  PrimaryButton(
+                    label: 'Login',
+                    loadingLabel: 'Memproses...',
+                    loading: loading,
+                    onPressed: loading ? null : _submit,
+                  ),
+                  // Forgot password - hanya tampil di layar medium/large
+                  if (screenHeight >= LoginConstants.smallScreenHeight) ...[
+                    SizedBox(height: spacing * 0.75),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: loading
+                            ? null
+                            : () {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Fitur reset kata sandi akan ditambahkan.',
+                                    ),
+                                  ),
+                                );
+                              },
+                        child: const Text('Lupa kata sandi?'),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _ErrorToast extends StatelessWidget {
-  const _ErrorToast({required this.message, super.key});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 18),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.45)),
-        gradient: LinearGradient(
-          colors: [
-            Colors.redAccent.withOpacity(0.14),
-            Colors.red.withOpacity(0.08),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline, color: Colors.redAccent),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Colors.redAccent),
+        // Footer text - hanya tampil di layar medium/large
+        if (screenHeight >= LoginConstants.smallScreenHeight) ...[
+          SizedBox(height: spacing),
+          Divider(color: colorScheme.outline.withOpacity(0.26)),
+          SizedBox(height: spacing * 0.75),
+          Text(
+            'Belum punya akun? Hubungi admin StrawSmart untuk registrasi.',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withOpacity(0.7),
             ),
+            textAlign: TextAlign.center,
           ),
         ],
-      ),
+      ],
     );
   }
 }
