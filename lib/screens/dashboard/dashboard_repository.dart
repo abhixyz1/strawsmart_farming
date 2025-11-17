@@ -55,7 +55,8 @@ class DashboardRepository {
   }
 
   Stream<PumpStatusData?> watchPump() {
-    return _deviceRef.child('pump').onValue.map((event) {
+    // Device firmware reports live pump state under /state.
+    return _deviceRef.child('state').onValue.map((event) {
       final data = _castSnapshot(event.snapshot.value);
       if (data == null) {
         return null;
@@ -146,12 +147,15 @@ class SensorSnapshot {
   final int? timestampMillis;
 
   factory SensorSnapshot.fromJson(Map<String, dynamic> json) {
+    final lightRaw = json.containsKey('lightIntensity')
+        ? json['lightIntensity']
+        : json['light'];
     return SensorSnapshot(
       temperature: _asDouble(json['temperature']),
       humidity: _asDouble(json['humidity']),
       soilMoisturePercent: _asDouble(json['soilMoisturePercent']),
       soilMoistureAdc: _asInt(json['soilMoistureADC']),
-      lightIntensity: _asInt(json['lightIntensity']),
+      lightIntensity: _asInt(lightRaw),
       timestampMillis: _asInt(json['timestamp']),
     );
   }
@@ -198,9 +202,20 @@ class PumpStatusData {
   bool get isOn => status.toUpperCase() == 'ON';
 
   factory PumpStatusData.fromJson(Map<String, dynamic> json) {
+    final bool? pumpFlag = json['pump'] is bool ? json['pump'] as bool : null;
+    final String resolvedStatus;
+    final rawStatus = json['status']?.toString();
+    if (rawStatus != null && rawStatus.isNotEmpty) {
+      resolvedStatus = rawStatus.toUpperCase();
+    } else if (pumpFlag != null) {
+      resolvedStatus = pumpFlag ? 'ON' : 'OFF';
+    } else {
+      resolvedStatus = 'OFF';
+    }
+    final lastChange = _asInt(json['lastChange'] ?? json['lastSync']);
     return PumpStatusData(
-      status: json['status']?.toString() ?? 'OFF',
-      lastChangeMillis: _asInt(json['lastChange']),
+      status: resolvedStatus,
+      lastChangeMillis: lastChange,
     );
   }
 }

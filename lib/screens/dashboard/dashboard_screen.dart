@@ -1,7 +1,10 @@
+﻿import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_controller.dart';
+import '../auth/user_profile_repository.dart';
 import '../../core/widgets/app_shell.dart';
 import 'dashboard_repository.dart';
 
@@ -52,13 +55,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       destinations: _destinations,
       selectedIndex: _selectedIndex,
       onIndexChanged: (index) => setState(() => _selectedIndex = index),
-      floatingActionButton: _selectedIndex == 0
-          ? FloatingActionButton.extended(
-              onPressed: () {},
-              icon: const Icon(Icons.add_circle_outline),
-              label: const Text('Tambah device'),
-            )
-          : null,
+      floatingActionButton: null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -100,12 +97,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
+    final profileAsync = ref.watch(currentUserProfileProvider);
+    final displayName = profileAsync.when<String?>(
+      data: (profile) => profile?.name,
+      loading: () => null,
+      error: (_, __) => null,
+    );
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _HeroHeader(),
+          _HeroHeader(userName: displayName),
           const SizedBox(height: 28),
           _SectionHeader(
             title: 'Sensor Wokwi real-time',
@@ -186,7 +190,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
-
   Widget _buildSensorSection(AsyncValue<SensorSnapshot?> latestAsync) {
     return latestAsync.when(
       data: (data) {
@@ -206,15 +209,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 : width >= 800
                     ? 3
                     : width >= 520
-                        ? 2
-                        : 1;
+                  ? 2
+                  : 1;
             final aspectRatio = width >= 1100
-                ? 2.2
-                : width >= 800
-                    ? 1.6
-                    : width >= 520
-                        ? 1.35
-                        : 1.2;
+              ? 2.2
+              : width >= 800
+                ? 1.6
+                : width >= 520
+                  ? 1.35
+                  : _mobileSensorCardAspectRatio(width);
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -227,7 +230,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               itemCount: sensors.length,
               itemBuilder: (context, index) {
                 final sensor = sensors[index];
-                return _SensorStatusCard(sensor: sensor);
+                return _SensorStatusCard(
+                  sensor: sensor,
+                  compact: columns == 1,
+                );
               },
             );
           },
@@ -512,6 +518,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
+
+  double _mobileSensorCardAspectRatio(double availableWidth) {
+    if (availableWidth <= 0) {
+      return 1.2;
+    }
+    final double targetHeight = availableWidth < 360 ? 210 : 190;
+    final ratio = availableWidth / targetHeight;
+    final num clampedRatio = ratio.clamp(1.2, 2.1);
+    return clampedRatio.toDouble();
+  }
 }
 
 class _DashboardAppBar extends StatelessWidget {
@@ -569,11 +585,16 @@ class _DashboardAppBar extends StatelessWidget {
 }
 
 class _HeroHeader extends StatelessWidget {
-  const _HeroHeader();
+  const _HeroHeader({this.userName});
+
+  final String? userName;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context).textTheme;
+    final name = (userName == null || userName!.trim().isEmpty)
+        ? 'Grower'
+        : userName!.trim();
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
@@ -591,7 +612,7 @@ class _HeroHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Selamat datang kembali, Grower!',
+              'Selamat datang kembali, $name!',
               style: theme.titleMedium?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
@@ -684,9 +705,13 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _SensorStatusCard extends StatelessWidget {
-  const _SensorStatusCard({required this.sensor});
+  const _SensorStatusCard({
+    required this.sensor,
+    this.compact = false,
+  });
 
   final _SensorStatus sensor;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -755,7 +780,10 @@ class _SensorStatusCard extends StatelessWidget {
                   .bodySmall
                   ?.copyWith(color: Colors.grey[700]),
             ),
-            const Spacer(),
+            if (compact)
+              const SizedBox(height: 12)
+            else
+              const Spacer(),
             Text(
               'Rentang ideal: ${sensor.range}',
               style: Theme.of(context)

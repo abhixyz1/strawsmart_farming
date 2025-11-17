@@ -41,9 +41,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   }
 
   InputDecorationTheme _buildFieldTheme(ColorScheme colorScheme) {
+    final baseBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(18),
+      borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.16)),
+    );
+
     return InputDecorationTheme(
       filled: true,
-      fillColor: colorScheme.surface.withOpacity(0.94),
+      fillColor: colorScheme.surface.withOpacity(0.96),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       labelStyle: TextStyle(
         color: colorScheme.onSurface.withOpacity(0.75),
@@ -54,17 +59,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
       prefixIconColor: colorScheme.primary,
       suffixIconColor: colorScheme.primary,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(20),
-        borderSide: BorderSide(color: colorScheme.outlineVariant),
+      border: baseBorder,
+      enabledBorder: baseBorder,
+      focusedBorder: baseBorder.copyWith(
+        borderSide: BorderSide(color: colorScheme.primary, width: 1.5),
       ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(20),
-        borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+      errorBorder: baseBorder.copyWith(
+        borderSide: BorderSide(color: Colors.red.shade400),
       ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(20),
-        borderSide: BorderSide(color: colorScheme.primary, width: 1.4),
+      focusedErrorBorder: baseBorder.copyWith(
+        borderSide: BorderSide(color: Colors.red.shade400, width: 1.5),
       ),
     );
   }
@@ -74,7 +78,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authControllerProvider);
     final loading = authState.isLoading;
     final errMsg = authState.hasError ? '${authState.error}' : null;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       body: Stack(
@@ -86,41 +91,35 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 460),
+                  constraints: const BoxConstraints(maxWidth: 480),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const _HeaderBadge(),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
                       _GlassCard(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(28, 32, 28, 32),
+                          padding: const EdgeInsets.fromLTRB(26, 30, 26, 30),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               Text(
                                 'Masuk ke StrawSmart',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .headlineSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                              const SizedBox(height: 8),
+                              const SizedBox(height: 6),
                               Text(
                                 'Kelola rumah kaca stroberi Anda dengan insight nutrisi, suhu, dan panen yang terpusat.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurface
-                                          .withOpacity(0.65),
-                                    ),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurface
+                                      .withOpacity(0.7),
+                                ),
                               ),
-                              const SizedBox(height: 24),
+                              const SizedBox(height: 22),
                               AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 250),
+                                duration: const Duration(milliseconds: 220),
                                 child: errMsg == null
                                     ? const SizedBox.shrink()
                                     : _ErrorToast(
@@ -129,128 +128,140 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                       ),
                               ),
                               Theme(
-                                data: Theme.of(context).copyWith(
+                                data: theme.copyWith(
                                   inputDecorationTheme:
                                       _buildFieldTheme(colorScheme),
                                 ),
-                                child: Form(
-                                  key: _formKey,
-                                  child: Column(
-                                    children: [
-                                      TextFormField(
-                                        controller: _emailC,
-                                        decoration: const InputDecoration(
-                                          labelText: 'Email Address',
-                                          hintText: 'nama@email.com',
-                                          prefixIcon: Icon(
-                                            Icons.alternate_email_outlined,
-                                          ),
-                                        ),
-                                        keyboardType:
-                                            TextInputType.emailAddress,
-                                        validator: (v) {
-                                          if (v == null || v.trim().isEmpty) {
-                                            return 'Email wajib diisi.';
-                                          }
-                                          final ok = RegExp(
-                                            r'^[^@]+@[^@]+\.[^@]+',
-                                          ).hasMatch(v.trim());
-                                          if (!ok) {
-                                            return 'Format email tidak valid.';
-                                          }
-                                          return null;
-                                        },
-                                        enabled: !loading,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      TextFormField(
-                                        controller: _passC,
-                                        obscureText: _obscure,
-                                        decoration: InputDecoration(
-                                          labelText: 'Password',
-                                          prefixIcon: const Icon(
-                                            Icons.lock_outline,
-                                          ),
-                                          suffixIcon: IconButton(
-                                            tooltip: _obscure
-                                                ? 'Tampilkan kata sandi'
-                                                : 'Sembunyikan kata sandi',
-                                            onPressed: loading
-                                                ? null
-                                                : () => setState(
-                                                      () => _obscure =
-                                                          !_obscure,
-                                                    ),
-                                            icon: Icon(
-                                              _obscure
-                                                  ? Icons.visibility
-                                                  : Icons.visibility_off,
+                                child: AutofillGroup(
+                                  child: Form(
+                                    key: _formKey,
+                                    child: Column(
+                                      children: [
+                                        TextFormField(
+                                          controller: _emailC,
+                                          decoration: const InputDecoration(
+                                            labelText: 'Alamat email',
+                                            hintText: 'nama@email.com',
+                                            prefixIcon: Icon(
+                                              Icons.alternate_email_outlined,
                                             ),
                                           ),
+                                          autofillHints: const [
+                                            AutofillHints.email
+                                          ],
+                                          keyboardType:
+                                              TextInputType.emailAddress,
+                                          textInputAction: TextInputAction.next,
+                                          validator: (v) {
+                                            if (v == null ||
+                                                v.trim().isEmpty) {
+                                              return 'Email wajib diisi.';
+                                            }
+                                            final ok = RegExp(
+                                              r'^[^@]+@[^@]+\.[^@]+',
+                                            ).hasMatch(v.trim());
+                                            if (!ok) {
+                                              return 'Format email tidak valid.';
+                                            }
+                                            return null;
+                                          },
+                                          enabled: !loading,
                                         ),
-                                        validator: (v) {
-                                          if (v == null || v.isEmpty) {
-                                            return 'Kata sandi wajib diisi.';
-                                          }
-                                          if (v.length < 6) {
-                                            return 'Minimal 6 karakter.';
-                                          }
-                                          return null;
-                                        },
-                                        enabled: !loading,
-                                      ),
-                                      const SizedBox(height: 24),
-                                      _PrimaryButton(
-                                        label: 'Login',
-                                        loadingLabel: 'Memproses...',
-                                        loading: loading,
-                                        onPressed: loading ? null : _submit,
-                                      ),
-                                      const SizedBox(height: 14),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: TextButton(
-                                          onPressed: loading
-                                              ? null
-                                              : () {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    const SnackBar(
-                                                      content: Text(
-                                                        'Fitur reset kata sandi akan ditambahkan.',
+                                        const SizedBox(height: 16),
+                                        TextFormField(
+                                          controller: _passC,
+                                          obscureText: _obscure,
+                                          decoration: InputDecoration(
+                                            labelText: 'Kata sandi',
+                                            prefixIcon: const Icon(
+                                              Icons.lock_outline,
+                                            ),
+                                            suffixIcon: IconButton(
+                                              tooltip: _obscure
+                                                  ? 'Tampilkan kata sandi'
+                                                  : 'Sembunyikan kata sandi',
+                                              onPressed: loading
+                                                  ? null
+                                                  : () => setState(
+                                                        () => _obscure =
+                                                            !_obscure,
                                                       ),
-                                                    ),
-                                                  );
-                                                },
-                                          child: const Text(
-                                              'Lupa kata sandi?'),
+                                              icon: Icon(
+                                                _obscure
+                                                    ? Icons.visibility
+                                                    : Icons.visibility_off,
+                                              ),
+                                            ),
+                                          ),
+                                          autofillHints: const [
+                                            AutofillHints.password
+                                          ],
+                                          textInputAction: TextInputAction.done,
+                                          onFieldSubmitted: (_) {
+                                            if (!loading) _submit();
+                                          },
+                                          validator: (v) {
+                                            if (v == null || v.isEmpty) {
+                                              return 'Kata sandi wajib diisi.';
+                                            }
+                                            if (v.length < 6) {
+                                              return 'Minimal 6 karakter.';
+                                            }
+                                            return null;
+                                          },
+                                          enabled: !loading,
                                         ),
-                                      ),
-                                    ],
+                                        const SizedBox(height: 22),
+                                        _PrimaryButton(
+                                          label: 'Login',
+                                          loadingLabel: 'Memproses...',
+                                          loading: loading,
+                                          onPressed: loading ? null : _submit,
+                                        ),
+                                        const SizedBox(height: 12),
+                                        Align(
+                                          alignment: Alignment.centerRight,
+                                          child: TextButton(
+                                            onPressed: loading
+                                                ? null
+                                                : () {
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      const SnackBar(
+                                                        content: Text(
+                                                          'Fitur reset kata sandi akan ditambahkan.',
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                            child:
+                                                const Text('Lupa kata sandi?'),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 18),
+                              const SizedBox(height: 16),
                               Divider(
-                                color: colorScheme.outline.withOpacity(0.3),
+                                color: colorScheme.outline.withOpacity(0.26),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               Text(
                                 'Belum punya akun? Hubungi admin StrawSmart untuk registrasi.',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodyMedium
-                                    ?.copyWith(
-                                      color: colorScheme.onSurface
-                                          .withOpacity(0.7),
-                                    ),
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  color: colorScheme.onSurface
+                                      .withOpacity(0.7),
+                                ),
                                 textAlign: TextAlign.center,
                               ),
                             ],
                           ),
                         ),
                       ),
-                      const SizedBox(height: 28),
+                      const SizedBox(height: 24),
                       const _InfoStrip(),
                     ],
                   ),
@@ -269,18 +280,20 @@ class _HeaderBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Column(
       children: [
         Container(
           padding: const EdgeInsets.all(6),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: Colors.white.withOpacity(0.15),
+            color: Colors.white.withOpacity(0.14),
             border: Border.all(color: Colors.white.withOpacity(0.35)),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x22000000),
-                blurRadius: 24,
+                blurRadius: 22,
                 offset: Offset(0, 16),
               ),
             ],
@@ -297,21 +310,21 @@ class _HeaderBadge extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 18),
+        const SizedBox(height: 16),
         Text(
           'StrawSmart Farming',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-              ),
+          style: theme.textTheme.titleLarge?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
           'Satu pintu untuk memantau nutrisi, iklim, dan panen stroberi.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withOpacity(0.85),
-              ),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: Colors.white.withOpacity(0.88),
+          ),
           textAlign: TextAlign.center,
         ),
       ],
@@ -327,19 +340,19 @@ class _GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(28),
+      borderRadius: BorderRadius.circular(24),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.95),
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: Colors.white.withOpacity(0.6)),
+            color: Colors.white.withOpacity(0.96),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: Colors.white.withOpacity(0.7)),
             boxShadow: const [
               BoxShadow(
                 color: Color(0x26000000),
-                blurRadius: 32,
-                offset: Offset(0, 20),
+                blurRadius: 28,
+                offset: Offset(0, 18),
               ),
             ],
           ),
@@ -356,11 +369,11 @@ class _InfoStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withOpacity(0.1),
-        border: Border.all(color: Colors.white.withOpacity(0.25)),
+        borderRadius: BorderRadius.circular(22),
+        color: Colors.white.withOpacity(0.08),
+        border: Border.all(color: Colors.white.withOpacity(0.22)),
       ),
       child: Row(
         children: const [
@@ -406,6 +419,7 @@ class _InfoItem extends StatelessWidget {
         children: [
           Row(
             children: [
+              const Icon(Icons.circle, size: 0), // menjaga tinggi Row
               Icon(icon, color: Colors.white, size: 18),
               const SizedBox(width: 6),
               Text(
@@ -421,7 +435,7 @@ class _InfoItem extends StatelessWidget {
           Text(
             subtitle,
             style: TextStyle(
-              color: Colors.white.withOpacity(0.75),
+              color: Colors.white.withOpacity(0.78),
               fontSize: 12,
             ),
           ),
@@ -481,7 +495,7 @@ class _GlowBlob extends StatelessWidget {
   const _GlowBlob({
     required this.size,
     required this.color,
-    this.intensity = 0.02,
+    this.intensity = 0.04,
   });
 
   final double size;
@@ -490,16 +504,18 @@ class _GlowBlob extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        gradient: RadialGradient(
-          colors: [
-            color,
-            color.withOpacity(intensity),
-          ],
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color,
+              color.withOpacity(intensity),
+            ],
+          ),
         ),
       ),
     );
@@ -521,11 +537,12 @@ class _PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final buttonTextStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
+    final textStyle = Theme.of(context).textTheme.labelLarge?.copyWith(
           fontWeight: FontWeight.w600,
           fontSize: 16,
           color: Colors.white,
         );
+
     return SizedBox(
       height: 48,
       width: double.infinity,
@@ -536,14 +553,9 @@ class _PrimaryButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           padding: EdgeInsets.zero,
-          elevation: 2,
+          elevation: 0,
           backgroundColor: Colors.transparent,
           shadowColor: Colors.transparent,
-        ).copyWith(
-          // Gradient background
-          backgroundColor: MaterialStateProperty.resolveWith<Color?>(
-            (states) => null,
-          ),
         ),
         child: Ink(
           decoration: BoxDecoration(
@@ -555,30 +567,37 @@ class _PrimaryButton extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
           ),
           child: Center(
-            child: loading
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              child: loading
+                  ? Row(
+                      key: const ValueKey('loading'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(loadingLabel, style: buttonTextStyle),
-                    ],
-                  )
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.login_rounded, color: Colors.white, size: 20),
-                      const SizedBox(width: 10),
-                      Text(label, style: buttonTextStyle),
-                    ],
-                  ),
+                        const SizedBox(width: 10),
+                        Text(loadingLabel, style: textStyle),
+                      ],
+                    )
+                  : Row(
+                      key: const ValueKey('idle'),
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.login_rounded,
+                            color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
+                        Text(label, style: textStyle),
+                      ],
+                    ),
+            ),
           ),
         ),
       ),
@@ -594,15 +613,15 @@ class _ErrorToast extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      margin: const EdgeInsets.only(bottom: 18),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.4)),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.45)),
         gradient: LinearGradient(
           colors: [
-            Colors.redAccent.withOpacity(0.12),
-            Colors.red.withOpacity(0.06),
+            Colors.redAccent.withOpacity(0.14),
+            Colors.red.withOpacity(0.08),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
