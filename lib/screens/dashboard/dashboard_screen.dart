@@ -77,7 +77,7 @@ class DashboardScreen extends ConsumerWidget {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.transparent,
+        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
         title: const Text('StrawSmart Dashboard'),
         actions: [
           IconButton(
