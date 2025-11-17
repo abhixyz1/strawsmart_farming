@@ -3,8 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../auth/auth_controller.dart';
 import '../auth/user_profile_repository.dart';
+import '../monitoring/monitoring_screen.dart';
+import '../profile/profile_screen.dart';
 import '../../core/widgets/app_shell.dart';
 import 'dashboard_repository.dart';
 
@@ -37,9 +38,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       label: 'Laporan',
     ),
     NavigationDestination(
-      icon: Icon(Icons.person_outline),
-      selectedIcon: Icon(Icons.person),
-      label: 'Profil',
+      icon: Icon(Icons.settings_outlined),
+      selectedIcon: Icon(Icons.settings),
+      label: 'Pengaturan',
     ),
   ];
 
@@ -61,8 +62,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           _DashboardAppBar(
             title: sectionTitle,
-            onLogout: () =>
-                ref.read(authControllerProvider.notifier).signOut(),
+            onRefresh: _selectedIndex == 0 ? _refreshRealtimeFeeds : null,
           ),
           const Divider(height: 1),
           Expanded(
@@ -88,6 +88,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     AsyncValue<CommandAck?> ackAsync,
     AsyncValue<ControlMode> controlModeAsync,
   ) {
+    // Tab Pengaturan (index 3)
+    if (_selectedIndex == 3) {
+      return const ProfileScreen();
+    }
+
+    // Tab Monitoring (index 1)
+    if (_selectedIndex == 1) {
+      return const MonitoringScreen();
+    }
+
+    // Tab lain yang belum diimplementasi (Laporan)
     if (_selectedIndex != 0) {
       return Center(
         child: Text(
@@ -190,18 +201,40 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
+
   Widget _buildSensorSection(AsyncValue<SensorSnapshot?> latestAsync) {
-    return latestAsync.when(
-      data: (data) {
-        if (data == null) {
-          return const _SectionMessageCard(
-            icon: Icons.sensors_off,
-            message:
-                'Belum ada data sensor dari perangkat. Pastikan simulasi Wokwi berjalan dan node terhubung ke Firebase.',
-          );
-        }
-        final sensors = _sensorStatusesFromData(data);
-        return LayoutBuilder(
+    // Get cached value even during loading/refresh
+    final data = latestAsync.valueOrNull;
+    final error = latestAsync.error;
+
+    // Show error if exists and no cached data
+    if (error != null && data == null) {
+      return _SectionMessageCard(
+        icon: Icons.error_outline,
+        message: 'Gagal memuat data sensor: $error',
+      );
+    }
+
+    // Show empty state if no data and not loading
+    if (data == null && !latestAsync.isLoading) {
+      return const _SectionMessageCard(
+        icon: Icons.sensors_off,
+        message:
+            'Belum ada data sensor dari perangkat. Pastikan simulasi Wokwi berjalan dan node terhubung ke Firebase.',
+      );
+    }
+
+    // Show loading message only on very first load
+    if (data == null && latestAsync.isLoading) {
+      return const _SectionMessageCard(
+        icon: Icons.sensors_off,
+        message: 'Menunggu data sensor dari perangkat...',
+      );
+    }
+
+    // Show data (cached or fresh)
+    final sensors = _sensorStatusesFromData(data!);
+    return LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
             final columns = width >= 1100
@@ -238,15 +271,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             );
           },
         );
-      },
-      loading: () => const _SectionLoadingCard(
-        message: 'Mengambil data sensor dari Firebase...',
-      ),
-      error: (error, _) => _SectionMessageCard(
-        icon: Icons.error_outline,
-        message: 'Gagal memuat data sensor: $error',
-      ),
-    );
   }
 
   Widget _buildPumpCard(
@@ -255,25 +279,31 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     AsyncValue<CommandAck?> ackAsync,
     AsyncValue<ControlMode> controlModeAsync,
   ) {
+    // Use valueOrNull to get cached data even during refresh
     final status = statusAsync.valueOrNull;
     final pump = pumpAsync.valueOrNull;
     final ack = ackAsync.valueOrNull;
     final controlMode = controlModeAsync.valueOrNull ?? ControlMode.auto;
     final pumpError = _errorOrNull(pumpAsync) ?? _errorOrNull(statusAsync);
 
-    if (pumpAsync.isLoading && pump == null) {
-      return const _SectionLoadingCard(
-        message: 'Mengambil status pompa dari Firebase...',
+    // Show error if exists and no cached data
+    if (pumpError != null && pump == null) {
+      return _SectionMessageCard(
+        icon: Icons.error_outline,
+        message: 'Gagal memuat status pompa: $pumpError',
       );
     }
 
+    // Show loading only on very first load
+    if (pump == null && pumpAsync.isLoading && !pumpAsync.hasValue) {
+      return const _SectionMessageCard(
+        icon: Icons.water_drop_outlined,
+        message: 'Menunggu status pompa dari perangkat...',
+      );
+    }
+
+    // Show empty state if no data available
     if (pump == null) {
-      if (pumpError != null) {
-        return _SectionMessageCard(
-          icon: Icons.error_outline,
-          message: 'Gagal memuat status pompa: $pumpError',
-        );
-      }
       return const _SectionMessageCard(
         icon: Icons.sensors,
         message: 'Menunggu perangkat melaporkan status pompa.',
@@ -533,11 +563,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 class _DashboardAppBar extends StatelessWidget {
   const _DashboardAppBar({
     required this.title,
-    required this.onLogout,
+    this.onRefresh,
   });
 
   final String title;
-  final VoidCallback onLogout;
+  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -572,12 +602,14 @@ class _DashboardAppBar extends StatelessWidget {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {},
           ),
-          const SizedBox(width: 8),
-          FilledButton.tonalIcon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Keluar'),
-          ),
+          if (onRefresh != null) ...[
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Refresh Data',
+              icon: const Icon(Icons.refresh_rounded),
+              onPressed: onRefresh,
+            ),
+          ],
         ],
       ),
     );
@@ -1043,38 +1075,6 @@ class _TipTile extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SectionLoadingCard extends StatelessWidget {
-  const _SectionLoadingCard({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            const SizedBox(
-              height: 28,
-              width: 28,
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                message,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

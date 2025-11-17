@@ -10,20 +10,56 @@ class UserProfile {
     required this.id,
     required this.name,
     required this.email,
-    required this.photoUrl,
+    this.phoneNumber,
+    this.photoUrl,
+    this.createdAt,
+    this.updatedAt,
   });
 
   final String id;
   final String name;
   final String email;
-  final String photoUrl;
+  final String? phoneNumber;
+  final String? photoUrl;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   factory UserProfile.fromMap(String id, Map<String, dynamic> data) {
     return UserProfile(
       id: id,
       name: data['name'] as String? ?? 'Grower',
       email: data['email'] as String? ?? '',
-      photoUrl: data['photoUrl'] as String? ?? '',
+      phoneNumber: data['phoneNumber'] as String?,
+      photoUrl: data['photoUrl'] as String?,
+      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'name': name,
+      'email': email,
+      'phoneNumber': phoneNumber,
+      'photoUrl': photoUrl,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
+  UserProfile copyWith({
+    String? name,
+    String? email,
+    String? phoneNumber,
+    String? photoUrl,
+  }) {
+    return UserProfile(
+      id: id,
+      name: name ?? this.name,
+      email: email ?? this.email,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      photoUrl: photoUrl ?? this.photoUrl,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
     );
   }
 }
@@ -40,6 +76,19 @@ class UserProfileRepository {
       if (data == null) return null;
       return UserProfile.fromMap(snapshot.id, data);
     });
+  }
+
+  Future<void> updateProfile(String uid, UserProfile profile) async {
+    final data = profile.toMap();
+    final docRef = _firestore.collection('users').doc(uid);
+    
+    final snapshot = await docRef.get();
+    if (!snapshot.exists) {
+      // Create document with createdAt if it doesn't exist
+      data['createdAt'] = FieldValue.serverTimestamp();
+    }
+    
+    await docRef.set(data, SetOptions(merge: true));
   }
 }
 
