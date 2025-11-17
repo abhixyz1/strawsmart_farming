@@ -625,7 +625,7 @@ class _DashboardAppBar extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'StrawSmart Dashboard',
+                '',
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
                       color: Theme.of(context)
                           .colorScheme
@@ -642,17 +642,23 @@ class _DashboardAppBar extends StatelessWidget {
             ],
           ),
           const Spacer(),
-          IconButton(
-            tooltip: 'Notifikasi',
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
+          Padding(
+            padding: EdgeInsets.only(top: 25), 
+            child: IconButton(
+              tooltip: 'Notifikasi',
+              icon: const Icon(Icons.notifications_outlined),
+              onPressed: () {},
+            ),
           ),
           if (onRefresh != null) ...[
             const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Refresh Data',
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: onRefresh,
+            Padding(
+              padding: EdgeInsets.only(top: 25), 
+              child: IconButton(
+                tooltip: 'Refresh Data',
+                icon: const Icon(Icons.refresh_rounded),
+                onPressed: onRefresh,
+              ),
             ),
           ],
         ],
