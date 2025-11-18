@@ -56,12 +56,21 @@ class DashboardRepository {
 
   Stream<PumpStatusData?> watchPump() {
     // Device firmware reports live pump state under /state.
+    // Also check /status/pump as fallback for legacy data structure.
     return _deviceRef.child('state').onValue.map((event) {
       final data = _castSnapshot(event.snapshot.value);
+      
+      // Debug logging to help troubleshoot pump data
+      print('[DashboardRepo] watchPump: path=devices/$deviceId/state, data=$data');
+      
       if (data == null) {
+        print('[DashboardRepo] watchPump: No data at /state, returning null');
         return null;
       }
-      return PumpStatusData.fromJson(data);
+      
+      final pump = PumpStatusData.fromJson(data);
+      print('[DashboardRepo] watchPump: Parsed pump status=${pump.status}, isOn=${pump.isOn}');
+      return pump;
     });
   }
 
@@ -177,6 +186,43 @@ class DeviceStatusData {
   final int? freeMemory;
   final int? uptimeMillis;
   final bool autoLogicEnabled;
+
+  /// Returns true if device is considered online.
+  /// Checks both the 'online' flag and if lastSeenMillis is within 60 seconds.
+  bool get isDeviceOnline {
+    if (online) return true;
+    
+    final lastSeen = lastSeenMillis;
+    if (lastSeen == null) return false;
+    
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final diffSeconds = (now - lastSeen) / 1000;
+    return diffSeconds <= 60;
+  }
+
+  /// Returns a human-readable string showing connection status.
+  /// Examples: "Terhubung 5 detik lalu" or "Perangkat offline"
+  String get connectionStatusLabel {
+    if (!isDeviceOnline) {
+      return 'Perangkat offline';
+    }
+    
+    final lastSeen = lastSeenMillis;
+    if (lastSeen == null) {
+      return 'Terhubung';
+    }
+    
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final diffSeconds = ((now - lastSeen) / 1000).round();
+    
+    if (diffSeconds < 5) {
+      return 'Terhubung (live)';
+    } else if (diffSeconds < 60) {
+      return 'Terhubung $diffSeconds detik lalu';
+    } else {
+      return 'Terhubung';
+    }
+  }
 
   factory DeviceStatusData.fromJson(Map<String, dynamic> json) {
     return DeviceStatusData(
