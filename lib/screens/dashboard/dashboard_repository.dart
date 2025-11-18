@@ -1,5 +1,7 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/services/strawberry_guidance.dart';
+import '../../models/guidance_item.dart';
 
 /// Device ID that Flutter dashboard should subscribe to.
 final dashboardDeviceIdProvider = Provider<String>((_) => 'greenhouse_node_001');
@@ -21,6 +23,12 @@ final pumpStatusProvider =
 
 final controlModeProvider = StreamProvider<ControlMode>((ref) {
   return ref.watch(dashboardRepositoryProvider).watchControlMode();
+});
+
+/// Provider untuk rekomendasi budidaya stroberi berdasarkan data sensor terbaru
+final strawberryGuidanceProvider = Provider<List<GuidanceItem>>((ref) {
+  final snapshot = ref.watch(latestTelemetryProvider).valueOrNull;
+  return StrawberryGuidanceService.instance.getRecommendations(snapshot);
 });
 
 class DashboardRepository {

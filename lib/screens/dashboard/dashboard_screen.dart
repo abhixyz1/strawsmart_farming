@@ -12,6 +12,7 @@ import '../../core/widgets/app_shell.dart';
 import '../../core/widgets/schedule_status_card.dart';
 import '../../services/schedule_executor_service.dart';
 import 'dashboard_repository.dart';
+import 'widgets/strawberry_guidance_section.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -145,6 +146,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
             const SizedBox(height: 16),
             _buildSensorSection(latestAsync),
+            const SizedBox(height: 32),
+            const StrawberryGuidanceSection(), // Insight budidaya stroberi
             const SizedBox(height: 32),
             const ScheduleStatusCard(), // Kartu jadwal otomatis dengan kontrol
             const SizedBox(height: 32),
