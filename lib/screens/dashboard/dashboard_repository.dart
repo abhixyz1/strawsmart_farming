@@ -2,7 +2,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Device ID that Flutter dashboard should subscribe to.
-final dashboardDeviceIdProvider = Provider<String>((_) => 'node_001');
+final dashboardDeviceIdProvider = Provider<String>((_) => 'greenhouse_node_001');
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
   final database = FirebaseDatabase.instance;
@@ -18,9 +18,6 @@ final deviceStatusProvider =
 
 final pumpStatusProvider =
     StreamProvider<PumpStatusData?>((ref) => ref.watch(dashboardRepositoryProvider).watchPump());
-
-final systemAckProvider =
-    StreamProvider<CommandAck?>((ref) => ref.watch(dashboardRepositoryProvider).watchSystemAck());
 
 final controlModeProvider = StreamProvider<ControlMode>((ref) {
   return ref.watch(dashboardRepositoryProvider).watchControlMode();
@@ -65,16 +62,6 @@ class DashboardRepository {
     });
   }
 
-  Stream<CommandAck?> watchSystemAck() {
-    return _deviceRef.child('commands/systemAck').onValue.map((event) {
-      final data = _castSnapshot(event.snapshot.value);
-      if (data == null) {
-        return null;
-      }
-      return CommandAck.fromJson(data);
-    });
-  }
-
   Stream<ControlMode> watchControlMode() {
     return _deviceRef.child('control/mode').onValue.map((event) {
       final raw = event.snapshot.value?.toString();
@@ -83,15 +70,13 @@ class DashboardRepository {
   }
 
   Future<void> sendPumpCommand({required bool turnOn, int durationSeconds = 30}) async {
-    final commandRef = _deviceRef.child('commands').push();
-    final payload = <String, Object?>{
-      'action': turnOn ? 'ON' : 'OFF',
-      'status': 'pending',
+    final controlRef = _deviceRef.child('control');
+    final updates = <String, Object?>{
+      'pump': turnOn,
       'duration': turnOn ? durationSeconds : 0,
-      'source': 'dashboard',
-      'requestedAt': ServerValue.timestamp,
+      'updatedAt': ServerValue.timestamp,
     };
-    await commandRef.set(payload);
+    await controlRef.update(updates);
   }
 
   Future<void> setControlMode(ControlMode mode) {
@@ -216,28 +201,6 @@ class PumpStatusData {
     return PumpStatusData(
       status: resolvedStatus,
       lastChangeMillis: lastChange,
-    );
-  }
-}
-
-class CommandAck {
-  CommandAck({
-    required this.status,
-    required this.message,
-    this.timestampMillis,
-  });
-
-  final String status;
-  final String message;
-  final int? timestampMillis;
-
-  bool get isSuccess => status == 'done';
-
-  factory CommandAck.fromJson(Map<String, dynamic> json) {
-    return CommandAck(
-      status: json['status']?.toString() ?? 'done',
-      message: json['message']?.toString() ?? '',
-      timestampMillis: _asInt(json['ack']),
     );
   }
 }

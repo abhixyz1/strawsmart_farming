@@ -52,7 +52,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final latestAsync = ref.watch(latestTelemetryProvider);
     final statusAsync = ref.watch(deviceStatusProvider);
     final pumpAsync = ref.watch(pumpStatusProvider);
-    final ackAsync = ref.watch(systemAckProvider);
     final controlModeAsync = ref.watch(controlModeProvider);
     final sectionTitle = _destinations[_selectedIndex].label;
     
@@ -78,7 +77,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               latestAsync,
               statusAsync,
               pumpAsync,
-              ackAsync,
               controlModeAsync,
             ),
           ),
@@ -92,7 +90,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     AsyncValue<SensorSnapshot?> latestAsync,
     AsyncValue<DeviceStatusData?> statusAsync,
     AsyncValue<PumpStatusData?> pumpAsync,
-    AsyncValue<CommandAck?> ackAsync,
     AsyncValue<ControlMode> controlModeAsync,
   ) {
     // Tab Pengaturan (index 3)
@@ -146,7 +143,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               final pumpCard = _buildPumpCard(
                 statusAsync,
                 pumpAsync,
-                ackAsync,
                 controlModeAsync,
               );
               const tipsCard = _CultivationTipsCard();
@@ -310,13 +306,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget _buildPumpCard(
     AsyncValue<DeviceStatusData?> statusAsync,
     AsyncValue<PumpStatusData?> pumpAsync,
-    AsyncValue<CommandAck?> ackAsync,
     AsyncValue<ControlMode> controlModeAsync,
   ) {
     // Use valueOrNull to get cached data even during refresh
     final status = statusAsync.valueOrNull;
     final pump = pumpAsync.valueOrNull;
-    final ack = ackAsync.valueOrNull;
     final controlMode = controlModeAsync.valueOrNull ?? ControlMode.auto;
     final pumpError = _errorOrNull(pumpAsync) ?? _errorOrNull(statusAsync);
 
@@ -350,7 +344,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       status: status,
       pump: pump,
       controlMode: controlMode,
-      systemAck: ack,
       runtimeLabel: runtimeLabel,
       isSendingPump: _isSendingPumpCommand,
       isUpdatingMode: _isUpdatingControlMode,
@@ -532,7 +525,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     ref.invalidate(latestTelemetryProvider);
     ref.invalidate(deviceStatusProvider);
     ref.invalidate(pumpStatusProvider);
-    ref.invalidate(systemAckProvider);
     ref.invalidate(controlModeProvider);
     _showSnackBar('Sinkronisasi data Firebase dimulai...');
   }
@@ -888,7 +880,6 @@ class _PumpStatusCard extends StatelessWidget {
     required this.status,
     required this.pump,
     required this.controlMode,
-    required this.systemAck,
     required this.runtimeLabel,
     required this.isSendingPump,
     required this.isUpdatingMode,
@@ -900,7 +891,6 @@ class _PumpStatusCard extends StatelessWidget {
   final DeviceStatusData? status;
   final PumpStatusData pump;
   final ControlMode controlMode;
-  final CommandAck? systemAck;
   final String? runtimeLabel;
   final bool isSendingPump;
   final bool isUpdatingMode;
@@ -1026,10 +1016,6 @@ class _PumpStatusCard extends StatelessWidget {
               icon: const Icon(Icons.sync),
               label: const Text('Sinkronkan dengan Wokwi'),
             ),
-            if (systemAck != null && systemAck!.message.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _AckBanner(ack: systemAck!),
-            ],
           ],
         ),
       ),
@@ -1194,51 +1180,6 @@ class _InfoPill extends StatelessWidget {
                 .textTheme
                 .labelSmall
                 ?.copyWith(color: foreground, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _AckBanner extends StatelessWidget {
-  const _AckBanner({required this.ack});
-
-  final CommandAck ack;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final success = ack.isSuccess;
-    final color = success ? theme.colorScheme.primary : theme.colorScheme.error;
-    final background = success
-      ? theme.colorScheme.primaryContainer.withAlpha((255 * 0.4).round())
-      : theme.colorScheme.errorContainer.withAlpha((255 * 0.4).round());
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Icon(success ? Icons.check_circle : Icons.error_outline, color: color),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              ack.message.isEmpty
-                  ? 'Perintah terakhir telah diproses.'
-                  : ack.message,
-              style: theme.textTheme.bodySmall?.copyWith(color: color),
-            ),
-          ),
-          Text(
-            ack.status.toUpperCase(),
-            style: theme.textTheme.labelSmall?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-            ),
           ),
         ],
       ),
