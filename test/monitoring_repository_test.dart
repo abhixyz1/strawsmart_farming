@@ -82,37 +82,32 @@ void main() {
       expect(snapshot.timestampMillis, isNotNull);
     });
 
-    test('Data filtering reduces overlapping readings', () {
-      // Simulasi data yang berdekatan (dalam 1 menit)
+    test('Repository returns all data without filtering', () {
+      // Repository seharusnya mengembalikan SEMUA data tanpa filtering
+      // Filtering dilakukan di UI layer berdasarkan pilihan user
+      
       final now = DateTime.now();
-      final readings = [
+      final testData = [
         {'timestamp': now.millisecondsSinceEpoch ~/ 1000}, // 0 min
+        {'timestamp': (now.subtract(const Duration(seconds: 30))).millisecondsSinceEpoch ~/ 1000}, // -30 sec
         {'timestamp': (now.subtract(const Duration(minutes: 1))).millisecondsSinceEpoch ~/ 1000}, // -1 min
         {'timestamp': (now.subtract(const Duration(minutes: 2))).millisecondsSinceEpoch ~/ 1000}, // -2 min
         {'timestamp': (now.subtract(const Duration(minutes: 5))).millisecondsSinceEpoch ~/ 1000}, // -5 min
-        {'timestamp': (now.subtract(const Duration(minutes: 10))).millisecondsSinceEpoch ~/ 1000}, // -10 min
       ];
 
-      // Dengan filter interval 5 menit, seharusnya:
-      // - 0 min: included (first)
-      // - 1-2 min: excluded (< 5 min dari previous)
-      // - 5 min: included (>= 5 min dari 0)
-      // - 10 min: included (>= 5 min dari 5)
-      // Expected result: 3 readings (0, 5, 10 min)
-      
-      expect(readings.length, 5, reason: 'Raw data has 5 readings');
-      // After filtering with 5-minute interval, expect ~3 readings
-      // (This validates the filtering logic concept)
+      // Repository tidak melakukan filtering, semua data dikembalikan
+      expect(testData.length, 5, reason: 'Repository should return all 5 readings');
+      // UI layer yang akan melakukan filtering sesuai pilihan user (0/1/5/10/30 menit)
     });
 
     test('Timestamp conversion from seconds to milliseconds', () {
-      // Firebase timestamp dalam detik: 1763470239
+      // Firebase menyimpan timestamp dalam detik: 1763470239
       const timestampSeconds = 1763470239;
       final timestampMillis = timestampSeconds * 1000;
       
       expect(timestampMillis, 1763470239000);
       
-      // Verify DateTime conversion
+      // Verify DateTime conversion works correctly
       final dateTime = DateTime.fromMillisecondsSinceEpoch(timestampMillis);
       expect(dateTime.year, 2025);
       expect(dateTime.month, 11); // November

@@ -40,40 +40,10 @@ class MonitoringRepository {
       // Sort by timestamp descending (newest first)
       readings.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-      // Filter: ambil 1 data per 5 menit untuk mengurangi data yang menumpuk
-      final filteredReadings = _filterReadingsByInterval(readings, intervalMinutes: 5);
-
-      return filteredReadings;
+      // Mengembalikan SEMUA data tanpa filtering
+      // Filtering akan dilakukan di UI layer sesuai pilihan user
+      return readings;
     });
-  }
-
-  /// Filter readings untuk mengambil 1 sample per interval (dalam menit).
-  /// Ini membuat grafik dan tabel lebih bersih dan tidak overlapping.
-  List<HistoricalReading> _filterReadingsByInterval(
-    List<HistoricalReading> readings, {
-    required int intervalMinutes,
-  }) {
-    if (readings.isEmpty) return readings;
-
-    final filtered = <HistoricalReading>[];
-    DateTime? lastIncludedTime;
-
-    for (final reading in readings) {
-      if (lastIncludedTime == null) {
-        // Always include first reading (newest)
-        filtered.add(reading);
-        lastIncludedTime = reading.timestamp;
-      } else {
-        // Include if the time difference is >= interval minutes
-        final difference = lastIncludedTime.difference(reading.timestamp).abs();
-        if (difference.inMinutes >= intervalMinutes) {
-          filtered.add(reading);
-          lastIncludedTime = reading.timestamp;
-        }
-      }
-    }
-
-    return filtered;
   }
 
   /// Recursively parse history map to handle both flat and nested structures.

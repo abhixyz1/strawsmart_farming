@@ -44,20 +44,61 @@ class MonitoringScreen extends ConsumerWidget {
   }
 }
 
-class _MonitoringContent extends StatelessWidget {
+class _MonitoringContent extends StatefulWidget {
   const _MonitoringContent({required this.readings});
 
   final List<HistoricalReading> readings;
 
   @override
+  State<_MonitoringContent> createState() => _MonitoringContentState();
+}
+
+class _MonitoringContentState extends State<_MonitoringContent> {
+  // Filter interval options (in minutes, 0 = show all)
+  int _selectedInterval = 5; // Default 5 menit
+
+  List<HistoricalReading> _getFilteredReadings() {
+    if (_selectedInterval == 0) {
+      // Show all data
+      return widget.readings;
+    }
+
+    // Apply interval filter
+    if (widget.readings.isEmpty) return widget.readings;
+
+    final filtered = <HistoricalReading>[];
+    DateTime? lastIncludedTime;
+
+    for (final reading in widget.readings) {
+      if (lastIncludedTime == null) {
+        filtered.add(reading);
+        lastIncludedTime = reading.timestamp;
+      } else {
+        final difference = lastIncludedTime.difference(reading.timestamp).abs();
+        if (difference.inMinutes >= _selectedInterval) {
+          filtered.add(reading);
+          lastIncludedTime = reading.timestamp;
+        }
+      }
+    }
+
+    return filtered;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final stats = _calculateStats(readings);
+    final filteredReadings = _getFilteredReadings();
+    final stats = _calculateStats(filteredReadings);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          // Filter Selector
+          _buildFilterSelector(context),
+          const SizedBox(height: 16),
+          
           // Summary Cards
           _buildSummaryCards(context, stats),
           const SizedBox(height: 32),
@@ -65,27 +106,171 @@ class _MonitoringContent extends StatelessWidget {
           // Temperature & Humidity Chart Section
           _ChartSection(
             title: 'Grafik Suhu & Kelembaban',
-            subtitle: 'Tren pembacaan (1 data per 5 menit)',
+            subtitle: _getFilterSubtitle(),
             icon: Icons.show_chart,
-            child: _TempHumidityChart(readings: readings),
+            child: _TempHumidityChart(readings: filteredReadings),
           ),
           const SizedBox(height: 24),
           
           // Soil Moisture Chart Section
           _ChartSection(
             title: 'Grafik Kelembaban Tanah',
-            subtitle: 'Monitor kondisi media tanam (interval 5 menit)',
+            subtitle: _getFilterSubtitle(),
             icon: Icons.water_drop,
-            child: _SoilMoistureChart(readings: readings),
+            child: _SoilMoistureChart(readings: filteredReadings),
           ),
           const SizedBox(height: 24),
           
           // Historical Readings Table
           _ChartSection(
             title: 'Riwayat Pembacaan Sensor',
-            subtitle: 'Data terfilter (1 per 5 menit, max 50 baris)',
+            subtitle: '${_getFilterSubtitle()} • Max 50 baris',
             icon: Icons.table_chart,
-            child: _HistoricalTable(readings: readings),
+            child: _HistoricalTable(readings: filteredReadings),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getFilterSubtitle() {
+    if (_selectedInterval == 0) return 'Menampilkan semua data';
+    if (_selectedInterval >= 60) {
+      final hours = _selectedInterval ~/ 60;
+      return '1 data per $hours jam';
+    }
+    return '1 data per $_selectedInterval menit';
+  }
+
+  Widget _buildFilterSelector(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final filteredReadings = _getFilteredReadings();
+    
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: colorScheme.outline.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.filter_list_rounded,
+            size: 20,
+            color: colorScheme.primary,
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Interval Data:',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: colorScheme.outline.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<int>(
+                  value: _selectedInterval,
+                  isDense: true,
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down_rounded,
+                    size: 20,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  onChanged: (int? value) {
+                    if (value != null) {
+                      setState(() => _selectedInterval = value);
+                    }
+                  },
+                  items: const [
+                    DropdownMenuItem(
+                      value: 0,
+                      child: Text(
+                        'Semua Data',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 1,
+                      child: Text(
+                        '1 Menit',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 5,
+                      child: Text(
+                        '5 Menit',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 10,
+                      child: Text(
+                        '10 Menit',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 30,
+                      child: Text(
+                        '30 Menit',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    DropdownMenuItem(
+                      value: 60,
+                      child: Text(
+                        '1 Jam',
+                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: colorScheme.primary,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.analytics_outlined,
+                  size: 14,
+                  color: colorScheme.onPrimary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  '${filteredReadings.length}',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onPrimary,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
