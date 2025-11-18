@@ -1,6 +1,7 @@
 ﻿import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/user_profile_repository.dart';
@@ -31,13 +32,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       label: 'Beranda',
     ),
     NavigationDestination(
-      icon: Icon(Icons.analytics_outlined),
-      selectedIcon: Icon(Icons.analytics),
+      icon: Icon(Icons.show_chart_outlined),
+      selectedIcon: Icon(Icons.show_chart),
       label: 'Monitoring',
     ),
     NavigationDestination(
-      icon: Icon(Icons.document_scanner_outlined),
-      selectedIcon: Icon(Icons.document_scanner),
+      icon: Icon(Icons.description_outlined),
+      selectedIcon: Icon(Icons.description),
       label: 'Laporan',
     ),
     NavigationDestination(
@@ -68,7 +69,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           _DashboardAppBar(
             title: sectionTitle,
-            onRefresh: _selectedIndex == 0 ? _refreshRealtimeFeeds : null,
           ),
           const Divider(height: 1),
           Expanded(
@@ -115,29 +115,45 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       error: (_, __) => null,
     );
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _HeroHeader(userName: displayName),
-          const SizedBox(height: 28),
-          _SectionHeader(
-            title: 'Sensor Wokwi real-time',
-            subtitle:
-                'Terhubung ke modul virtual untuk suhu, cahaya, kelembapan, dan tanah.',
-          ),
-          const SizedBox(height: 16),
-          _buildSensorSection(latestAsync),
-          const SizedBox(height: 32),
-          const ScheduleStatusCard(), // Kartu jadwal otomatis dengan kontrol
-          const SizedBox(height: 32),
-          _SectionHeader(
-            title: 'Kontrol lingkungan',
-            subtitle: 'Pantau pompa nutrisi & insight budidaya StrawSmart.',
-          ),
-          const SizedBox(height: 16),
-          LayoutBuilder(
+    return RefreshIndicator(
+      color: Theme.of(context).colorScheme.primary,
+      onRefresh: () async {
+        // Invalidate all providers to refresh data
+        ref.invalidate(latestTelemetryProvider);
+        ref.invalidate(deviceStatusProvider);
+        ref.invalidate(pumpStatusProvider);
+        ref.invalidate(controlModeProvider);
+        
+        // Add haptic feedback
+        HapticFeedback.mediumImpact();
+        
+        // Small delay for better UX
+        await Future.delayed(const Duration(milliseconds: 300));
+      },
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _HeroHeader(userName: displayName),
+            const SizedBox(height: 28),
+            _SectionHeader(
+              title: 'Sensor Wokwi real-time',
+              subtitle:
+                  'Terhubung ke modul virtual untuk suhu, cahaya, kelembapan, dan tanah.',
+            ),
+            const SizedBox(height: 16),
+            _buildSensorSection(latestAsync),
+            const SizedBox(height: 32),
+            const ScheduleStatusCard(), // Kartu jadwal otomatis dengan kontrol
+            const SizedBox(height: 32),
+            _SectionHeader(
+              title: 'Kontrol lingkungan',
+              subtitle: 'Pantau pompa nutrisi & insight budidaya StrawSmart.',
+            ),
+            const SizedBox(height: 16),
+            LayoutBuilder(
             builder: (context, constraints) {
               final isWide = constraints.maxWidth >= 900;
               final pumpCard = _buildPumpCard(
@@ -200,6 +216,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ],
       ),
+    ),
     );
   }
 
@@ -272,13 +289,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     : width >= 520
                   ? 2
                   : 1;
-            final aspectRatio = width >= 1100
-              ? 2.2
-              : width >= 800
-                ? 1.6
-                : width >= 520
-                  ? 1.35
-                  : _mobileSensorCardAspectRatio(width);
+            // Compressed cards with 1.2 aspect ratio for better visual density
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -286,15 +297,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 crossAxisCount: columns,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
-                childAspectRatio: aspectRatio,
+                childAspectRatio: 1.2,
               ),
               itemCount: sensors.length,
               itemBuilder: (context, index) {
                 final sensor = sensors[index];
-                return _SensorStatusCard(
-                  sensor: sensor,
-                  compact: columns == 1,
-                );
+                return _SensorStatusCard(sensor: sensor);
               },
             );
           },
@@ -538,6 +546,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return;
     }
 
+    // Check if device is online before allowing pump toggle
+    final isOnline = status?.isDeviceOnline ?? false;
+    if (!isOnline) {
+      _showSnackBar(
+        'Tidak dapat mengontrol pompa. ${status?.connectionStatusLabel ?? "Perangkat offline"}.',
+        isError: true,
+      );
+      return;
+    }
+
     if (desiredState && mode != ControlMode.manual) {
       _showSnackBar(
         'Aktifkan mode manual terlebih dahulu sebelum menyalakan pompa.',
@@ -552,10 +570,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             turnOn: desiredState,
             durationSeconds: desiredState ? 30 : 0,
           );
-      final suffix = status?.online == true
-          ? ''
-          : ' (node offline - perintah akan dijalankan saat online)';
-      _showSnackBar('Perintah pompa dikirim$suffix');
+      _showSnackBar('Perintah pompa dikirim ke perangkat.');
     } catch (e) {
       _showSnackBar('Gagal mengirim perintah: $e', isError: true);
     } finally {
@@ -594,25 +609,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  double _mobileSensorCardAspectRatio(double availableWidth) {
-    if (availableWidth <= 0) {
-      return 1.2;
-    }
-    final double targetHeight = availableWidth < 360 ? 210 : 190;
-    final ratio = availableWidth / targetHeight;
-    final num clampedRatio = ratio.clamp(1.2, 2.1);
-    return clampedRatio.toDouble();
-  }
 }
 
 class _DashboardAppBar extends StatelessWidget {
   const _DashboardAppBar({
     required this.title,
-    this.onRefresh,
   });
 
   final String title;
-  final VoidCallback? onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -647,14 +651,6 @@ class _DashboardAppBar extends StatelessWidget {
             icon: const Icon(Icons.notifications_outlined),
             onPressed: () {},
           ),
-          if (onRefresh != null) ...[
-            const SizedBox(width: 8),
-            IconButton(
-              tooltip: 'Refresh Data',
-              icon: const Icon(Icons.refresh_rounded),
-              onPressed: onRefresh,
-            ),
-          ],
         ],
       ),
     );
@@ -782,91 +778,58 @@ class _SectionHeader extends StatelessWidget {
 }
 
 class _SensorStatusCard extends StatelessWidget {
-  const _SensorStatusCard({
-    required this.sensor,
-    this.compact = false,
-  });
+  const _SensorStatusCard({required this.sensor});
 
   final _SensorStatus sensor;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(20),
           gradient: LinearGradient(
             colors: [
-              sensor.color.withAlpha((255 * 0.12).round()),
-              sensor.color.withAlpha((255 * 0.04).round()),
+              sensor.color.withAlpha((255 * 0.10).round()),
+              sensor.color.withAlpha((255 * 0.03).round()),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(
-              children: [
-                Icon(sensor.icon, color: sensor.color),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    sensor.title,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    sensor.module,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: sensor.color.darken(),
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ),
-              ],
+            // Icon at top
+            Icon(
+              sensor.icon,
+              color: sensor.color,
+              size: 32,
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            // Value in center (large)
             Text(
               sensor.value,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
+                    color: sensor.color.darken(0.2),
                   ),
+              textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 6),
+            // Label at bottom (small)
             Text(
-              sensor.status,
-              maxLines: 2,
+              sensor.title,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w500,
+                  ),
+              textAlign: TextAlign.center,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: Colors.grey[700]),
-            ),
-            if (compact)
-              const SizedBox(height: 12)
-            else
-              const Spacer(),
-            Text(
-              'Rentang ideal: ${sensor.range}',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelSmall
-                  ?.copyWith(color: Colors.grey[600]),
             ),
           ],
         ),
@@ -902,10 +865,11 @@ class _PumpStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final online = status?.online ?? false;
+    final online = status?.isDeviceOnline ?? false;
+    final connectionLabel = status?.connectionStatusLabel ?? 'Status tidak diketahui';
     final wifi = status?.wifiSignalStrength;
     final autoLogic = status?.autoLogicEnabled ?? false;
-    final canTogglePump = !isSendingPump;
+    final canTogglePump = !isSendingPump && online;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -986,7 +950,7 @@ class _PumpStatusCard extends StatelessWidget {
               children: [
                 _InfoPill(
                   icon: online ? Icons.check_circle : Icons.error_outline,
-                  label: online ? 'Perangkat online' : 'Perangkat offline',
+                  label: connectionLabel,
                   background:
                       (online ? Colors.green : Colors.red).withAlpha((255 * 0.12).round()),
                   foreground: online ? Colors.green[800]! : Colors.red[700]!,

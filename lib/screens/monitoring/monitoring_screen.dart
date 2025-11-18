@@ -1,11 +1,20 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'monitoring_repository.dart';
 
 class MonitoringScreen extends ConsumerWidget {
   const MonitoringScreen({super.key});
+
+  /// Refresh callback untuk pull-to-refresh dan refresh button
+  Future<void> _handleRefresh(WidgetRef ref) async {
+    HapticFeedback.mediumImpact();
+    ref.invalidate(historicalReadingsProvider);
+    // Wait sedikit untuk give feedback ke user
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -17,26 +26,20 @@ class MonitoringScreen extends ConsumerWidget {
     final error = readingsAsync.error;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Monitoring'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Data',
-            onPressed: () => ref.invalidate(historicalReadingsProvider),
-          ),
-        ],
+      body: RefreshIndicator(
+        color: Theme.of(context).colorScheme.primary,
+        onRefresh: () => _handleRefresh(ref),
+        child: isLoading
+            ? const _ShimmerLoadingState()
+            : error != null && readings.isEmpty
+                ? _ErrorStateWidget(
+                    error: error,
+                    onRetry: () => ref.invalidate(historicalReadingsProvider),
+                  )
+                : readings.isEmpty
+                    ? const _EmptyStateWidget()
+                    : _MonitoringContent(readings: readings),
       ),
-      body: isLoading
-          ? const _ShimmerLoadingState()
-          : error != null && readings.isEmpty
-              ? _ErrorStateWidget(
-                  error: error,
-                  onRetry: () => ref.invalidate(historicalReadingsProvider),
-                )
-              : readings.isEmpty
-                  ? const _EmptyStateWidget()
-                  : _MonitoringContent(readings: readings),
     );
   }
 }
@@ -845,31 +848,46 @@ class _EmptyStateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.timeline_outlined,
-            size: 80,
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+    // Make scrollable agar RefreshIndicator bisa triggered
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.timeline_outlined,
+                size: 80,
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Belum Ada Data Historis',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Data monitoring akan ditampilkan di sini\nsetelah perangkat mulai mengirim data',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '⬇️ Tarik ke bawah untuk refresh',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Text(
-            'Belum Ada Data Historis',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Data monitoring akan ditampilkan di sini\nsetelah perangkat mulai mengirim data',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -883,49 +901,56 @@ class _ErrorStateWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.cloud_off_outlined,
-                size: 64,
-                color: Theme.of(context).colorScheme.error,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Gagal Memuat Data',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
+    // Make scrollable agar RefreshIndicator bisa triggered
+    return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
+                    shape: BoxShape.circle,
                   ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              error.toString(),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  child: Icon(
+                    Icons.cloud_off_outlined,
+                    size: 64,
+                    color: Theme.of(context).colorScheme.error,
                   ),
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Gagal Memuat Data',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: onRetry,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Coba Lagi'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Coba Lagi'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );
