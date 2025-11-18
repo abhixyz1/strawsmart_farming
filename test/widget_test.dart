@@ -55,7 +55,7 @@ void main() {
       expect(find.byIcon(Icons.light_mode), findsOneWidget);
     });
 
-    testWidgets('Sensor grid adapts to mobile screen (1 column)',
+    testWidgets('Sensor grid displays minimum 2 columns on mobile',
         (WidgetTester tester) async {
       final mockSensorData = SensorSnapshot(
         temperature: 25.0,
@@ -65,13 +65,13 @@ void main() {
         timestampMillis: DateTime.now().millisecondsSinceEpoch,
       );
 
-      // Build test widget with narrow screen constraints
+      // Build test widget with mobile screen constraints
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
             body: SingleChildScrollView(
               child: SizedBox(
-                width: 400, // Narrow screen to trigger 1-column layout
+                width: 400, // Mobile screen width
                 height: 2000, // Enough height to render all cards
                 child: _MockSensorGrid(sensorData: mockSensorData),
               ),
@@ -82,13 +82,13 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Verify cards are displayed in single column
+      // Verify cards are displayed
       expect(find.byType(Card), findsNWidgets(4));
       
-      // Verify aspect ratio is consistent (1.2 for compressed layout)
+      // Verify grid shows 2 columns on mobile (not 1)
       final gridView = tester.widget<GridView>(find.byType(GridView));
       final delegate = gridView.gridDelegate as SliverGridDelegateWithFixedCrossAxisCount;
-      expect(delegate.crossAxisCount, 1);
+      expect(delegate.crossAxisCount, 2, reason: 'Mobile should show minimum 2 columns');
       expect(delegate.childAspectRatio, 1.2);
     });
 
@@ -231,21 +231,20 @@ class _MockSensorGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        // Minimal 2 kolom di mobile, 3 di tablet, 4 di desktop
         final columns = width >= 1100
             ? 4
             : width >= 800
                 ? 3
-                : width >= 520
-                    ? 2
-                    : 1;
+                : 2; // Minimal 2 kolom untuk mobile
 
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 12,
             childAspectRatio: 1.2,
           ),
           itemCount: sensors.length,
@@ -303,11 +302,11 @@ class _MockSensorCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: [
               color.withAlpha((255 * 0.10).round()),
@@ -320,20 +319,22 @@ class _MockSensorCard extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 12),
+            Icon(icon, color: color, size: 28),
+            const SizedBox(height: 8),
             Text(
               value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: Colors.grey[700],
                     fontWeight: FontWeight.w500,
                   ),

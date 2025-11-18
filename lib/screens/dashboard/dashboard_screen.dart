@@ -282,21 +282,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         LayoutBuilder(
           builder: (context, constraints) {
             final width = constraints.maxWidth;
+            // Minimal 2 kolom di mobile (≤520px), 3 di tablet, 4 di desktop
             final columns = width >= 1100
                 ? 4
                 : width >= 800
                     ? 3
-                    : width >= 520
-                  ? 2
-                  : 1;
-            // Compressed cards with 1.2 aspect ratio for better visual density
+                    : 2; // Minimal 2 kolom untuk mobile
+            // Compressed cards dengan aspect ratio 1.2 untuk visual density optimal
             return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
                 childAspectRatio: 1.2,
               ),
               itemCount: sensors.length,
@@ -786,11 +785,11 @@ class _SensorStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Card(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
           gradient: LinearGradient(
             colors: [
               sensor.color.withAlpha((255 * 0.10).round()),
@@ -807,23 +806,25 @@ class _SensorStatusCard extends StatelessWidget {
             Icon(
               sensor.icon,
               color: sensor.color,
-              size: 32,
+              size: 28,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             // Value in center (large)
             Text(
               sensor.value,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: sensor.color.darken(0.2),
                   ),
               textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             // Label at bottom (small)
             Text(
               sensor.title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: Colors.grey[700],
                     fontWeight: FontWeight.w500,
                   ),

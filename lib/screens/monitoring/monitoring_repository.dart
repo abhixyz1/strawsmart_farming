@@ -1,9 +1,12 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../dashboard/dashboard_repository.dart';
 
+/// Monitoring repository menggunakan deviceId yang sama dengan dashboard
 final monitoringRepositoryProvider = Provider<MonitoringRepository>((ref) {
   final database = FirebaseDatabase.instance;
-  return MonitoringRepository(database, deviceId: 'node_001');
+  final deviceId = ref.watch(dashboardDeviceIdProvider);
+  return MonitoringRepository(database, deviceId: deviceId);
 });
 
 final historicalReadingsProvider = StreamProvider<List<HistoricalReading>>((ref) {
