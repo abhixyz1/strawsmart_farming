@@ -23,6 +23,7 @@ class MonitoringRepository {
 
   /// Watches historical sensor readings from Firebase Realtime Database.
   /// Handles both flat structure (history/{timestamp}) and nested (history/{date}/{time}).
+  /// Data difilter untuk menampilkan 1 reading per 5 menit agar tidak terlalu menumpuk.
   Stream<List<HistoricalReading>> watchHistoricalReadings() {
     return _deviceRef.child('history').onValue.map((event) {
       final data = event.snapshot.value;
@@ -39,8 +40,40 @@ class MonitoringRepository {
       // Sort by timestamp descending (newest first)
       readings.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-      return readings;
+      // Filter: ambil 1 data per 5 menit untuk mengurangi data yang menumpuk
+      final filteredReadings = _filterReadingsByInterval(readings, intervalMinutes: 5);
+
+      return filteredReadings;
     });
+  }
+
+  /// Filter readings untuk mengambil 1 sample per interval (dalam menit).
+  /// Ini membuat grafik dan tabel lebih bersih dan tidak overlapping.
+  List<HistoricalReading> _filterReadingsByInterval(
+    List<HistoricalReading> readings, {
+    required int intervalMinutes,
+  }) {
+    if (readings.isEmpty) return readings;
+
+    final filtered = <HistoricalReading>[];
+    DateTime? lastIncludedTime;
+
+    for (final reading in readings) {
+      if (lastIncludedTime == null) {
+        // Always include first reading (newest)
+        filtered.add(reading);
+        lastIncludedTime = reading.timestamp;
+      } else {
+        // Include if the time difference is >= interval minutes
+        final difference = lastIncludedTime.difference(reading.timestamp).abs();
+        if (difference.inMinutes >= intervalMinutes) {
+          filtered.add(reading);
+          lastIncludedTime = reading.timestamp;
+        }
+      }
+    }
+
+    return filtered;
   }
 
   /// Recursively parse history map to handle both flat and nested structures.
@@ -145,8 +178,9 @@ class HistoricalReading {
     String? parentKey,
     String? currentKey,
   }) {
-    // Priority 1: Use timestamp field if present
-    int timestampMillis = _asInt(json['timestamp']) ?? 0;
+    // Priority 1: Use timestamp field if present (Firebase stores in seconds, convert to milliseconds)
+    final timestampSeconds = _asInt(json['timestamp']);
+    int timestampMillis = timestampSeconds != null ? timestampSeconds * 1000 : 0;
     
     // Priority 2: Build from parent date key + current time key
     if (timestampMillis == 0 && parentKey != null && currentKey != null) {

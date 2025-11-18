@@ -65,7 +65,7 @@ class _MonitoringContent extends StatelessWidget {
           // Temperature & Humidity Chart Section
           _ChartSection(
             title: 'Grafik Suhu & Kelembaban',
-            subtitle: 'Tren 20 pembacaan terakhir',
+            subtitle: 'Tren pembacaan (1 data per 5 menit)',
             icon: Icons.show_chart,
             child: _TempHumidityChart(readings: readings),
           ),
@@ -74,7 +74,7 @@ class _MonitoringContent extends StatelessWidget {
           // Soil Moisture Chart Section
           _ChartSection(
             title: 'Grafik Kelembaban Tanah',
-            subtitle: 'Monitor kondisi media tanam',
+            subtitle: 'Monitor kondisi media tanam (interval 5 menit)',
             icon: Icons.water_drop,
             child: _SoilMoistureChart(readings: readings),
           ),
@@ -83,7 +83,7 @@ class _MonitoringContent extends StatelessWidget {
           // Historical Readings Table
           _ChartSection(
             title: 'Riwayat Pembacaan Sensor',
-            subtitle: 'Data lengkap dari perangkat',
+            subtitle: 'Data terfilter (1 per 5 menit, max 50 baris)',
             icon: Icons.table_chart,
             child: _HistoricalTable(readings: readings),
           ),
