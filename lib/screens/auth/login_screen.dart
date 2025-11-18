@@ -9,6 +9,7 @@ import 'widgets/glass_card.dart';
 import 'widgets/gradient_background.dart';
 import 'widgets/login_header.dart';
 import 'widgets/primary_button.dart';
+import 'forgot_password.dart';
 
 /// Login screen dengan responsive layout, keyboard handling, dan accessibility
 /// Optimized untuk fit dalam 1 viewport tanpa scroll di mobile (>=667px height)
@@ -401,15 +402,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: loading
                             ? null
                             : () {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text(
-                                      'Fitur reset kata sandi akan ditambahkan.',
-                                    ),
-                                  ),
-                                );
-                              },
-                        child: const Text('Lupa kata sandi?'),
+                                Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const ForgotPasswordEmailPage(),
+                                ),
+                              );
+                            },
+                      child: const Text('Lupa kata sandi?'),
                       ),
                     ),
                   ],
