@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../auth/auth_controller.dart';
 import '../auth/user_profile_repository.dart';
 import 'profile_controller.dart';
+import '../../core/providers/theme_provider.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -187,19 +188,21 @@ class _AccountHeader extends StatelessWidget {
   }
 }
 
-class _PreferencesSection extends StatefulWidget {
+class _PreferencesSection extends ConsumerStatefulWidget {
   const _PreferencesSection();
 
   @override
-  State<_PreferencesSection> createState() => _PreferencesSectionState();
+  ConsumerState<_PreferencesSection> createState() => _PreferencesSectionState();
 }
 
-class _PreferencesSectionState extends State<_PreferencesSection> {
+class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = false;
 
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeModeProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
+    
     return _SettingsCard(
       title: 'Preferensi',
       icon: Icons.tune_outlined,
@@ -218,11 +221,11 @@ class _PreferencesSectionState extends State<_PreferencesSection> {
         _SettingsTile(
           icon: Icons.dark_mode_outlined,
           title: 'Mode Gelap',
-          subtitle: _darkModeEnabled ? 'Aktif' : 'Nonaktif',
+          subtitle: isDarkMode ? 'Aktif' : 'Nonaktif',
           trailing: Switch(
-            value: _darkModeEnabled,
+            value: isDarkMode,
             onChanged: (value) {
-              setState(() => _darkModeEnabled = value);
+              ref.read(themeModeProvider.notifier).toggleDarkMode();
             },
           ),
         ),

@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_theme.dart';
 import 'widgets/glass_card.dart';
 import 'widgets/primary_button.dart';
 import 'widgets/gradient_background.dart';
 import 'widgets/error_toast.dart';
-
-// Kamu tetap meng-import file login_screen.dart sesuai permintaan
-import 'login_screen.dart';
 
 class ForgotPasswordEmailPage extends StatefulWidget {
   const ForgotPasswordEmailPage({super.key});
@@ -64,29 +62,34 @@ class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
+    // Paksa gunakan tema terang untuk halaman forgot password
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Builder(
+        builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          final theme = Theme.of(context);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const GradientBackground(),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: GlassCard(
-                  child: Padding(
+          return Scaffold(
+            body: Stack(
+              children: [
+                const GradientBackground(),
+                Center(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          'Lupa Kata Sandi',
-                          style: theme.textTheme.headlineSmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: GlassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Lupa Kata Sandi',
+                                style: theme.textTheme.headlineSmall
+                                    ?.copyWith(fontWeight: FontWeight.w700),
+                              ),
                         const SizedBox(height: 8),
                         Text(
                           'Masukkan email untuk mengubah kata sandi',
@@ -155,6 +158,9 @@ class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
         ],
       ),
     );
+        },
+      ),
+    );
   }
 }
 
@@ -202,23 +208,28 @@ class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
+    // Paksa gunakan tema terang untuk halaman OTP
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Builder(
+        builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          final theme = Theme.of(context);
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const GradientBackground(),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: GlassCard(
-                  child: Padding(
+          return Scaffold(
+            body: Stack(
+              children: [
+                const GradientBackground(),
+                Center(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: GlassCard(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            children: [
                         Text(
                           'Ubah Kata Sandi',
                           style: theme.textTheme.headlineSmall
@@ -275,9 +286,11 @@ class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
         ],
       ),
     );
+        },
+      ),
+    );
   }
 }
-
 
 class ForgotPasswordNewPassPage extends StatefulWidget {
   const ForgotPasswordNewPassPage({super.key});
@@ -313,35 +326,40 @@ class _ForgotPasswordNewPassPageState
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final theme = Theme.of(context);
+    // Paksa gunakan tema terang untuk halaman new password
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Builder(
+        builder: (context) {
+          final cs = Theme.of(context).colorScheme;
+          final theme = Theme.of(context);
 
-    InputDecoration _dec(String label, bool obs, VoidCallback toggle) {
-      return InputDecoration(
-        labelText: label,
-        filled: true,
-        fillColor: cs.surface.withOpacity(0.96),
-        prefixIcon: const Icon(Icons.lock_outline),
-        suffixIcon: IconButton(
-          icon: Icon(obs ? Icons.visibility : Icons.visibility_off),
-          onPressed: toggle,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
-      );
-    }
+          InputDecoration _dec(String label, bool obs, VoidCallback toggle) {
+            return InputDecoration(
+              labelText: label,
+              filled: true,
+              fillColor: cs.surface.withOpacity(0.96),
+              prefixIcon: const Icon(Icons.lock_outline),
+              suffixIcon: IconButton(
+                icon: Icon(obs ? Icons.visibility : Icons.visibility_off),
+                onPressed: toggle,
+              ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            );
+          }
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          const GradientBackground(),
-          Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: GlassCard(
+          return Scaffold(
+            body: Stack(
+              children: [
+                const GradientBackground(),
+                Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: GlassCard(
                   child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Column(
@@ -421,6 +439,9 @@ class _ForgotPasswordNewPassPageState
             ),
           ),
         ],
+      ),
+    );
+        },
       ),
     );
   }

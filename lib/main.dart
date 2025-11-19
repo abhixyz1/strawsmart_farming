@@ -5,6 +5,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'firebase_options.dart';
 import 'app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'core/providers/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,17 +27,17 @@ class AppRoot extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'StrawSmart',
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.redAccent),
-        inputDecorationTheme: const InputDecorationTheme(
-          border: OutlineInputBorder(),
-        ),
-        textTheme: AppTheme.lightTheme.textTheme,  
-      ),
+      // Light theme - original design
+      theme: AppTheme.lightTheme,
+      // Dark theme - new dark mode support
+      darkTheme: AppTheme.darkTheme,
+      // ThemeMode - controlled by provider (system/light/dark)
+      themeMode: themeMode,
       routerConfig: router,
     );
   }

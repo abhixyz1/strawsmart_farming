@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/constants/login_constants.dart';
+import '../../core/theme/app_theme.dart';
 import 'auth_controller.dart';
 import 'widgets/error_toast.dart';
 import 'widgets/glass_card.dart';
@@ -109,8 +110,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authControllerProvider);
     final loading = authState.isLoading;
     final errMsg = authState.hasError ? '${authState.error}' : _currentError;
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
     final size = MediaQuery.of(context).size;
     final viewInsets = MediaQuery.of(context).viewInsets;
     final isLandscape = LoginConstants.isLandscape(context);
@@ -121,43 +120,54 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final cardPadding = LoginConstants.getCardPadding(screenHeight);
     final spacing = LoginConstants.getSpacing(screenHeight);
 
-    return Scaffold(
-      resizeToAvoidBottomInset: true,
-      body: Stack(
-        children: [
-          const GradientBackground(),
-          SafeArea(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                // Untuk landscape atau tablet, gunakan layout horizontal
-                if (isLandscape && constraints.maxWidth > 700) {
-                  return _buildLandscapeLayout(
-                    loading: loading,
-                    errMsg: errMsg,
-                    theme: theme,
-                    colorScheme: colorScheme,
-                    cardPadding: cardPadding,
-                    spacing: spacing,
-                  );
-                }
-                
-                // Default portrait layout
-                return _buildPortraitLayout(
-                  loading: loading,
-                  errMsg: errMsg,
-                  theme: theme,
-                  colorScheme: colorScheme,
-                  verticalPadding: verticalPadding,
-                  horizontalPadding: horizontalPadding,
-                  cardPadding: cardPadding,
-                  spacing: spacing,
-                  viewInsets: viewInsets,
-                  screenHeight: screenHeight,
-                );
-              },
+    // Paksa gunakan tema terang untuk halaman login
+    return Theme(
+      data: AppTheme.lightTheme,
+      child: Builder(
+        builder: (context) {
+          final theme = Theme.of(context);
+          final colorScheme = theme.colorScheme;
+          
+          return Scaffold(
+            resizeToAvoidBottomInset: true,
+            body: Stack(
+              children: [
+                const GradientBackground(),
+                SafeArea(
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      // Untuk landscape atau tablet, gunakan layout horizontal
+                      if (isLandscape && constraints.maxWidth > 700) {
+                        return _buildLandscapeLayout(
+                          loading: loading,
+                          errMsg: errMsg,
+                          theme: theme,
+                          colorScheme: colorScheme,
+                          cardPadding: cardPadding,
+                          spacing: spacing,
+                        );
+                      }
+                      
+                      // Default portrait layout
+                      return _buildPortraitLayout(
+                        loading: loading,
+                        errMsg: errMsg,
+                        theme: theme,
+                        colorScheme: colorScheme,
+                        verticalPadding: verticalPadding,
+                        horizontalPadding: horizontalPadding,
+                        cardPadding: cardPadding,
+                        spacing: spacing,
+                        viewInsets: viewInsets,
+                        screenHeight: screenHeight,
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
