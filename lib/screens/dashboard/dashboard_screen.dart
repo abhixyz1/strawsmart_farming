@@ -156,34 +156,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               subtitle: 'Pantau pompa nutrisi & insight budidaya StrawSmart.',
             ),
             const SizedBox(height: 16),
-            LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 900;
-              final pumpCard = _buildPumpCard(
-                statusAsync,
-                pumpAsync,
-                controlModeAsync,
-              );
-              const tipsCard = _CultivationTipsCard();
-              if (isWide) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: pumpCard),
-                    const SizedBox(width: 16),
-                    Expanded(child: tipsCard),
-                  ],
-                );
-              }
-              return Column(
-                children: [
-                  pumpCard,
-                  const SizedBox(height: 16),
-                  tipsCard,
-                ],
-              );
-            },
-          ),
+            _buildPumpCard(
+              statusAsync,
+              pumpAsync,
+              controlModeAsync,
+            ),
           const SizedBox(height: 32),
           Text(
             'Grafik aktivitas',
@@ -987,101 +964,6 @@ class _PumpStatusCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _CultivationTipsCard extends StatelessWidget {
-  const _CultivationTipsCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.spa, color: Colors.pink[400]),
-                const SizedBox(width: 8),
-                Text(
-                  'Insight budidaya stroberi',
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _TipTile(
-              icon: Icons.sunny,
-              title: 'Cahaya 12 jam',
-              message: 'Pastikan grow light menyala minimal 12 jam/hari.',
-            ),
-            const SizedBox(height: 10),
-            _TipTile(
-              icon: Icons.thermostat,
-              title: 'Jaga suhu 24-28 deg C',
-              message: 'Aktifkan kipas otomatis jika suhu di atas 28 deg C.',
-            ),
-            const SizedBox(height: 10),
-            _TipTile(
-              icon: Icons.water_drop,
-              title: 'Kelembapan 60%',
-              message: 'Gunakan fogger Wokwi jika kelembapan turun drastis.',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TipTile extends StatelessWidget {
-  const _TipTile({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: Colors.grey[700]),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context)
-                    .textTheme
-                    .labelLarge
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                message,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: Colors.grey[600]),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
