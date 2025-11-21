@@ -19,6 +19,7 @@ class MonitoringScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final readingsAsync = ref.watch(historicalReadingsProvider);
+    final selectedDate = ref.watch(selectedMonitoringDateProvider);
     
     // Use cached value if available during loading
     final readings = readingsAsync.valueOrNull ?? [];
@@ -26,34 +27,205 @@ class MonitoringScreen extends ConsumerWidget {
     final error = readingsAsync.error;
 
     return Scaffold(
-      body: RefreshIndicator(
-        color: Theme.of(context).colorScheme.primary,
-        onRefresh: () => _handleRefresh(ref),
-        child: isLoading
-            ? const _ShimmerLoadingState()
-            : error != null && readings.isEmpty
-                ? _ErrorStateWidget(
-                    error: error,
-                    onRetry: () => ref.invalidate(historicalReadingsProvider),
-                  )
-                : readings.isEmpty
-                    ? const _EmptyStateWidget()
-                    : _MonitoringContent(readings: readings),
+      body: Column(
+        children: [
+          // Date Picker Header - Selalu tampil
+          _DatePickerHeader(selectedDate: selectedDate),
+          const Divider(height: 1),
+          
+          // Content Area
+          Expanded(
+            child: RefreshIndicator(
+              color: Theme.of(context).colorScheme.primary,
+              onRefresh: () => _handleRefresh(ref),
+              child: isLoading
+                  ? const _ShimmerLoadingState()
+                  : error != null && readings.isEmpty
+                      ? _ErrorStateWidget(
+                          error: error,
+                          onRetry: () => ref.invalidate(historicalReadingsProvider),
+                        )
+                      : readings.isEmpty
+                          ? _EmptyStateWidget(selectedDate: selectedDate)
+                          : _MonitoringContent(readings: readings),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Menampilkan date picker dialog
+  static Future<void> showMonitoringDatePicker(BuildContext context, WidgetRef ref) async {
+    final selectedDate = ref.read(selectedMonitoringDateProvider);
+    
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2024, 1, 1),
+      lastDate: DateTime.now(),
+      locale: const Locale('id', 'ID'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: Theme.of(context).colorScheme.copyWith(
+              primary: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null && picked != selectedDate) {
+      ref.read(selectedMonitoringDateProvider.notifier).state = picked;
+    }
+  }
+}
+
+/// Widget header dengan date picker yang selalu tampil
+class _DatePickerHeader extends ConsumerWidget {
+  const _DatePickerHeader({required this.selectedDate});
+
+  final DateTime selectedDate;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final formattedDate = DateFormat('dd MMMM yyyy', 'id_ID').format(selectedDate);
+    
+    return Container(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primaryContainer.withOpacity(0.6),
+            colorScheme.primaryContainer.withOpacity(0.3),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pilih Tanggal Data',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () => MonitoringScreen.showMonitoringDatePicker(context, ref),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colorScheme.primary.withOpacity(0.4),
+                        width: 2,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: colorScheme.primary.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.calendar_today_rounded,
+                          size: 22,
+                          color: colorScheme.primary,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            formattedDate,
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_drop_down_rounded,
+                          color: colorScheme.primary,
+                          size: 28,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              
+              // Quick navigation buttons
+              IconButton(
+                icon: Icon(Icons.chevron_left_rounded, color: colorScheme.primary),
+                tooltip: 'Hari sebelumnya',
+                onPressed: () {
+                  ref.read(selectedMonitoringDateProvider.notifier).state = 
+                      selectedDate.subtract(const Duration(days: 1));
+                },
+                style: IconButton.styleFrom(
+                  backgroundColor: colorScheme.surface,
+                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.today_rounded, color: colorScheme.primary),
+                tooltip: 'Hari ini',
+                onPressed: () {
+                  ref.read(selectedMonitoringDateProvider.notifier).state = DateTime.now();
+                },
+                style: IconButton.styleFrom(
+                  backgroundColor: colorScheme.surface,
+                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.chevron_right_rounded, color: colorScheme.primary),
+                tooltip: 'Hari berikutnya',
+                onPressed: () {
+                  final nextDay = selectedDate.add(const Duration(days: 1));
+                  if (nextDay.isBefore(DateTime.now().add(const Duration(days: 1)))) {
+                    ref.read(selectedMonitoringDateProvider.notifier).state = nextDay;
+                  }
+                },
+                style: IconButton.styleFrom(
+                  backgroundColor: colorScheme.surface,
+                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 }
 
-class _MonitoringContent extends StatefulWidget {
+class _MonitoringContent extends ConsumerStatefulWidget {
   const _MonitoringContent({required this.readings});
 
   final List<HistoricalReading> readings;
 
   @override
-  State<_MonitoringContent> createState() => _MonitoringContentState();
+  ConsumerState<_MonitoringContent> createState() => _MonitoringContentState();
 }
 
-class _MonitoringContentState extends State<_MonitoringContent> {
+class _MonitoringContentState extends ConsumerState<_MonitoringContent> {
   // Filter interval options (in minutes, 0 = show all)
   int _selectedInterval = 5; // Default 5 menit
 
@@ -88,20 +260,15 @@ class _MonitoringContentState extends State<_MonitoringContent> {
   @override
   Widget build(BuildContext context) {
     final filteredReadings = _getFilteredReadings();
-    final stats = _calculateStats(filteredReadings);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Filter Selector
+          // Filter Selector with Date Picker
           _buildFilterSelector(context),
-          const SizedBox(height: 16),
-          
-          // Summary Cards
-          _buildSummaryCards(context, stats),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           
           // Temperature & Humidity Chart Section
           _ChartSection(
@@ -124,7 +291,7 @@ class _MonitoringContentState extends State<_MonitoringContent> {
           // Historical Readings Table
           _ChartSection(
             title: 'Riwayat Pembacaan Sensor',
-            subtitle: '${_getFilterSubtitle()} • Max 50 baris',
+            subtitle: '${_getFilterSubtitle()} • Maks 50 baris',
             icon: Icons.table_chart,
             child: _HistoricalTable(readings: filteredReadings),
           ),
@@ -134,18 +301,27 @@ class _MonitoringContentState extends State<_MonitoringContent> {
   }
 
   String _getFilterSubtitle() {
-    if (_selectedInterval == 0) return 'Menampilkan semua data';
-    if (_selectedInterval >= 60) {
+    final selectedDate = ref.watch(selectedMonitoringDateProvider);
+    final dateStr = DateFormat('dd MMM yyyy', 'id_ID').format(selectedDate);
+    
+    String intervalStr;
+    if (_selectedInterval == 0) {
+      intervalStr = 'Semua data';
+    } else if (_selectedInterval >= 60) {
       final hours = _selectedInterval ~/ 60;
-      return '1 data per $hours jam';
+      intervalStr = '1 data per $hours jam';
+    } else {
+      intervalStr = '1 data per $_selectedInterval menit';
     }
-    return '1 data per $_selectedInterval menit';
+    
+    return '$intervalStr • $dateStr';
   }
 
   Widget _buildFilterSelector(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final filteredReadings = _getFilteredReadings();
     
+    // Interval Filter Row - Date picker sudah dipindah ke header
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -275,271 +451,6 @@ class _MonitoringContentState extends State<_MonitoringContent> {
         ],
       ),
     );
-  }
-
-  Widget _buildSummaryCards(BuildContext context, _Stats stats) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 800;
-        
-        final cards = [
-          _SummaryCard(
-            title: 'Suhu',
-            icon: Icons.thermostat_outlined,
-            current: stats.lastTemp != null ? '${stats.lastTemp!.toStringAsFixed(1)}°C' : 'N/A',
-            min: stats.minTemp != null ? 'Min: ${stats.minTemp!.toStringAsFixed(1)}°C' : null,
-            max: stats.maxTemp != null ? 'Max: ${stats.maxTemp!.toStringAsFixed(1)}°C' : null,
-            color: const Color(0xFFFF6B6B),
-          ),
-          _SummaryCard(
-            title: 'Kelembaban Udara',
-            icon: Icons.water_drop_outlined,
-            current: stats.lastHumidity != null ? '${stats.lastHumidity!.toStringAsFixed(1)}%' : 'N/A',
-            min: stats.minHumidity != null ? 'Min: ${stats.minHumidity!.toStringAsFixed(1)}%' : null,
-            max: stats.maxHumidity != null ? 'Max: ${stats.maxHumidity!.toStringAsFixed(1)}%' : null,
-            color: const Color(0xFF4ECDC4),
-          ),
-          _SummaryCard(
-            title: 'Kelembaban Tanah',
-            icon: Icons.grass_outlined,
-            current: stats.lastSoil != null ? '${stats.lastSoil!.toStringAsFixed(1)}%' : 'N/A',
-            min: stats.minSoil != null ? 'Min: ${stats.minSoil!.toStringAsFixed(1)}%' : null,
-            max: stats.maxSoil != null ? 'Max: ${stats.maxSoil!.toStringAsFixed(1)}%' : null,
-            color: const Color(0xFF95E1D3),
-          ),
-          _SummaryCard(
-            title: 'Intensitas Cahaya',
-            icon: Icons.wb_sunny_outlined,
-            current: stats.lastLight != null ? '${stats.lastLight!.toStringAsFixed(0)}%' : 'N/A',
-            min: stats.minLight != null ? 'Min: ${stats.minLight!.toStringAsFixed(0)}%' : null,
-            max: stats.maxLight != null ? 'Max: ${stats.maxLight!.toStringAsFixed(0)}%' : null,
-            color: const Color(0xFFFFA07A),
-          ),
-        ];
-
-        if (isWide) {
-          return Row(
-            children: cards
-                .map((card) => Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: card,
-                      ),
-                    ))
-                .toList(),
-          );
-        }
-
-        return Column(
-          children: cards
-              .map((card) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: card,
-                  ))
-              .toList(),
-        );
-      },
-    );
-  }
-
-  _Stats _calculateStats(List<HistoricalReading> readings) {
-    if (readings.isEmpty) {
-      return _Stats();
-    }
-
-    final temps = readings.where((r) => r.temperature != null).map((r) => r.temperature!).toList();
-    final humidities = readings.where((r) => r.humidity != null).map((r) => r.humidity!).toList();
-    final soils = readings.where((r) => r.soilMoisturePercent != null).map((r) => r.soilMoisturePercent!).toList();
-    final lights = readings.where((r) => r.lightIntensity != null).map((r) => r.lightIntensity!).toList();
-
-    return _Stats(
-      lastTemp: temps.isNotEmpty ? temps.first : null,
-      minTemp: temps.isNotEmpty ? temps.reduce((a, b) => a < b ? a : b) : null,
-      maxTemp: temps.isNotEmpty ? temps.reduce((a, b) => a > b ? a : b) : null,
-      lastHumidity: humidities.isNotEmpty ? humidities.first : null,
-      minHumidity: humidities.isNotEmpty ? humidities.reduce((a, b) => a < b ? a : b) : null,
-      maxHumidity: humidities.isNotEmpty ? humidities.reduce((a, b) => a > b ? a : b) : null,
-      lastSoil: soils.isNotEmpty ? soils.first : null,
-      minSoil: soils.isNotEmpty ? soils.reduce((a, b) => a < b ? a : b) : null,
-      maxSoil: soils.isNotEmpty ? soils.reduce((a, b) => a > b ? a : b) : null,
-      lastLight: lights.isNotEmpty ? lights.first : null,
-      minLight: lights.isNotEmpty ? lights.reduce((a, b) => a < b ? a : b) : null,
-      maxLight: lights.isNotEmpty ? lights.reduce((a, b) => a > b ? a : b) : null,
-    );
-  }
-}
-
-class _Stats {
-  final double? lastTemp;
-  final double? minTemp;
-  final double? maxTemp;
-  final double? lastHumidity;
-  final double? minHumidity;
-  final double? maxHumidity;
-  final double? lastSoil;
-  final double? minSoil;
-  final double? maxSoil;
-  final double? lastLight;
-  final double? minLight;
-  final double? maxLight;
-
-  _Stats({
-    this.lastTemp,
-    this.minTemp,
-    this.maxTemp,
-    this.lastHumidity,
-    this.minHumidity,
-    this.maxHumidity,
-    this.lastSoil,
-    this.minSoil,
-    this.maxSoil,
-    this.lastLight,
-    this.minLight,
-    this.maxLight,
-  });
-}
-
-class _SummaryCard extends StatelessWidget {
-  const _SummaryCard({
-    required this.title,
-    required this.icon,
-    required this.current,
-    this.min,
-    this.max,
-    required this.color,
-  });
-
-  final String title;
-  final IconData icon;
-  final String current;
-  final String? min;
-  final String? max;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            color.withValues(alpha: 0.25),
-            color.withValues(alpha: 0.12),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withValues(alpha: 0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(icon, color: color, size: 28),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: color.darken(0.2),
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              current,
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: color.darken(0.3),
-                    letterSpacing: -0.5,
-                  ),
-            ),
-            if (min != null || max != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (min != null)
-                    Expanded(
-                      child: _StatLabel(
-                        label: min!,
-                        color: color.darken(0.15),
-                      ),
-                    ),
-                  if (min != null && max != null) const SizedBox(width: 8),
-                  if (max != null)
-                    Expanded(
-                      child: _StatLabel(
-                        label: max!,
-                        color: color.darken(0.15),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatLabel extends StatelessWidget {
-  const _StatLabel({required this.label, required this.color});
-
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.7),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        label,
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: color,
-            ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-}
-
-extension on Color {
-  Color darken([double amount = 0.1]) {
-    final hsl = HSLColor.fromColor(this);
-    final hslDark = hsl.withLightness((hsl.lightness - amount).clamp(0.0, 1.0));
-    return hslDark.toColor();
   }
 }
 
@@ -1028,11 +939,17 @@ class _HistoricalTable extends StatelessWidget {
   }
 }
 
-class _EmptyStateWidget extends StatelessWidget {
-  const _EmptyStateWidget();
+class _EmptyStateWidget extends ConsumerWidget {
+  const _EmptyStateWidget({required this.selectedDate});
+
+  final DateTime selectedDate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final formattedDate = DateFormat('dd MMMM yyyy', 'id_ID').format(selectedDate);
+    final isToday = DateFormat('yyyy-MM-dd').format(selectedDate) == 
+                    DateFormat('yyyy-MM-dd').format(DateTime.now());
+    
     // Make scrollable agar RefreshIndicator bisa triggered
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
@@ -1043,33 +960,53 @@ class _EmptyStateWidget extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                Icons.timeline_outlined,
+                Icons.calendar_today_outlined,
                 size: 80,
                 color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
               ),
               const SizedBox(height: 16),
               Text(
-                'Belum Ada Data Historis',
+                isToday ? 'Belum Ada Data Hari Ini' : 'Tidak Ada Data',
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
               const SizedBox(height: 8),
               Text(
-                'Data monitoring akan ditampilkan di sini\nsetelah perangkat mulai mengirim data',
+                'Tidak ada data sensor untuk tanggal\n$formattedDate',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                     ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                '⬇️ Tarik ke bawah untuk refresh',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.w500,
-                    ),
-              ),
+              const SizedBox(height: 24),
+              if (isToday)
+                Text(
+                  '⬇️ Tarik ke bawah untuk refresh',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                        fontWeight: FontWeight.w500,
+                      ),
+                )
+              else ...[
+                // Tombol untuk pilih tanggal lain
+                FilledButton.icon(
+                  onPressed: () => MonitoringScreen.showMonitoringDatePicker(context, ref),
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: const Text('Pilih Tanggal Lain'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    ref.read(selectedMonitoringDateProvider.notifier).state = DateTime.now();
+                  },
+                  icon: const Icon(Icons.today_rounded),
+                  label: const Text('Kembali ke Hari Ini'),
+                ),
+              ],
             ],
           ),
         ),

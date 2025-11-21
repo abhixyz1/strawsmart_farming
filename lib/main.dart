@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'firebase_options.dart';
 import 'app_router.dart';
 import 'core/theme/app_theme.dart';
@@ -32,6 +33,17 @@ class AppRoot extends ConsumerWidget {
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'StrawSmart',
+      // Localization delegates untuk DatePicker bahasa Indonesia
+      localizationsDelegates: [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: [
+        Locale('id', 'ID'), // Indonesian
+        Locale('en', 'US'), // English (fallback)
+      ],
+      locale: Locale('id', 'ID'),
       // Light theme - original design
       theme: AppTheme.lightTheme,
       // Dark theme - new dark mode support

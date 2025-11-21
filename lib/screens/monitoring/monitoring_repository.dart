@@ -2,6 +2,12 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../dashboard/dashboard_repository.dart';
 
+/// Provider untuk tanggal yang dipilih di halaman Monitoring
+/// Default: hari ini
+final selectedMonitoringDateProvider = StateProvider<DateTime>((ref) {
+  return DateTime.now();
+});
+
 /// Monitoring repository menggunakan deviceId yang sama dengan dashboard
 final monitoringRepositoryProvider = Provider<MonitoringRepository>((ref) {
   final database = FirebaseDatabase.instance;
@@ -9,8 +15,10 @@ final monitoringRepositoryProvider = Provider<MonitoringRepository>((ref) {
   return MonitoringRepository(database, deviceId: deviceId);
 });
 
+/// Provider untuk historical readings yang sudah difilter berdasarkan tanggal terpilih
 final historicalReadingsProvider = StreamProvider<List<HistoricalReading>>((ref) {
-  return ref.watch(monitoringRepositoryProvider).watchHistoricalReadings();
+  final selectedDate = ref.watch(selectedMonitoringDateProvider);
+  return ref.watch(monitoringRepositoryProvider).watchHistoricalReadingsByDate(selectedDate);
 });
 
 class MonitoringRepository {
@@ -20,6 +28,31 @@ class MonitoringRepository {
   final String deviceId;
 
   DatabaseReference get _deviceRef => _database.ref('devices/$deviceId');
+
+  /// Watch historical sensor readings untuk tanggal tertentu.
+  /// Format path di Firebase: devices/{deviceId}/history/{yyyy-MM-dd}/{HH:mm:ss}
+  Stream<List<HistoricalReading>> watchHistoricalReadingsByDate(DateTime date) {
+    // Format tanggal untuk path Firebase (yyyy-MM-dd)
+    final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    
+    return _deviceRef.child('history/$dateKey').onValue.map((event) {
+      final data = event.snapshot.value;
+      if (data == null) {
+        return <HistoricalReading>[];
+      }
+
+      final List<HistoricalReading> readings = [];
+
+      if (data is Map) {
+        _parseHistoryMap(data, readings, prefix: dateKey);
+      }
+
+      // Sort by timestamp descending (newest first)
+      readings.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      return readings;
+    });
+  }
 
   /// Watches historical sensor readings from Firebase Realtime Database.
   /// Handles both flat structure (history/{timestamp}) and nested (history/{date}/{time}).
