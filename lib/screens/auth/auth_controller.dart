@@ -27,19 +27,25 @@ class AuthController extends StateNotifier<AsyncValue<User?>> {
   String _mapFirebaseError(FirebaseAuthException e) {
     switch (e.code) {
       case 'invalid-email':
-        return 'Format email tidak valid.';
+        return 'Format email tidak valid. Periksa kembali alamat email Anda.';
       case 'user-disabled':
-        return 'Akun dinonaktifkan.';
+        return 'Akun dinonaktifkan. Hubungi admin untuk mengaktifkan kembali.';
       case 'user-not-found':
-        return 'Email tidak terdaftar.';
+        return 'Email tidak terdaftar. Periksa email atau hubungi admin untuk registrasi.';
       case 'wrong-password':
-        return 'Kata sandi salah.';
+        return 'Kata sandi salah. Periksa kembali atau gunakan "Lupa kata sandi".';
+      case 'invalid-credential':
+        return 'Email atau kata sandi salah. Periksa kembali kredensial Anda.';
       case 'too-many-requests':
-        return 'Terlalu banyak percobaan. Coba beberapa menit lagi.';
+        return 'Terlalu banyak percobaan login. Tunggu beberapa menit atau reset kata sandi.';
       case 'network-request-failed':
-        return 'Koneksi jaringan bermasalah.';
+        return 'Koneksi jaringan bermasalah. Periksa koneksi internet Anda.';
+      case 'email-already-in-use':
+        return 'Email sudah terdaftar. Gunakan email lain atau login.';
+      case 'weak-password':
+        return 'Kata sandi terlalu lemah. Gunakan minimal 6 karakter dengan angka & simbol.';
       default:
-        return 'Gagal masuk: ${e.message ?? e.code}';
+        return 'Gagal masuk. Periksa email/kata sandi atau hubungi admin.';
     }
   }
 }

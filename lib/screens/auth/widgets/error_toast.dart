@@ -72,27 +72,46 @@ class _ErrorToastState extends State<ErrorToast>
         label: 'Error: ${widget.message}',
         child: Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(LoginConstants.inputBorderRadius),
-            border: Border.all(color: Colors.redAccent.withOpacity(0.45)),
+            border: Border.all(
+              color: Colors.pink.shade300.withOpacity(0.4),
+              width: 1.5,
+            ),
             gradient: LinearGradient(
               colors: [
-                Colors.redAccent.withOpacity(0.14),
-                Colors.red.withOpacity(0.08),
+                Colors.pink.shade50.withOpacity(0.9),
+                Colors.red.shade50.withOpacity(0.85),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.pink.shade100.withOpacity(0.3),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.error_outline, color: Colors.redAccent),
-              const SizedBox(width: 10),
+              Icon(
+                Icons.error_outline_rounded,
+                color: Colors.pink.shade700,
+                size: 22,
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: Text(
                   widget.message,
-                  style: const TextStyle(color: Colors.redAccent),
+                  style: TextStyle(
+                    color: Colors.pink.shade900,
+                    fontSize: 13.5,
+                    height: 1.4,
+                  ),
                 ),
               ),
             ],

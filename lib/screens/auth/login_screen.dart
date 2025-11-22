@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/constants/login_constants.dart';
 import '../../core/theme/app_theme.dart';
 import 'auth_controller.dart';
+import 'validators/password_validator.dart';
 import 'widgets/error_toast.dart';
 import 'widgets/glass_card.dart';
 import 'widgets/gradient_background.dart';
@@ -363,6 +364,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       obscureText: _obscure,
                       decoration: InputDecoration(
                         labelText: 'Kata sandi',
+                        helperText: PasswordValidator.helperText,
+                        helperMaxLines: 2,
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
                           tooltip: _obscure
@@ -383,15 +386,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onFieldSubmitted: (_) {
                         if (!loading) _submit();
                       },
-                      validator: (v) {
-                        if (v == null || v.isEmpty) {
-                          return 'Kata sandi wajib diisi.';
-                        }
-                        if (v.length < 6) {
-                          return 'Minimal 6 karakter.';
-                        }
-                        return null;
-                      },
+                      validator: PasswordValidator.validate,
                       enabled: !loading,
                     ),
                   ),
