@@ -11,6 +11,15 @@ import 'widgets/gradient_background.dart';
 import 'widgets/error_toast.dart';
 import 'widgets/otp_input_field.dart';
 
+void _navigateBackToLogin(BuildContext context) {
+  final router = GoRouter.of(context);
+  final navigator = Navigator.of(context);
+  if (navigator.canPop()) {
+    navigator.popUntil((route) => route.isFirst);
+  }
+  Future.microtask(() => router.go('/login'));
+}
+
 class ForgotPasswordEmailPage extends ConsumerStatefulWidget {
   const ForgotPasswordEmailPage({super.key});
 
@@ -172,11 +181,19 @@ class _ForgotPasswordEmailPageState extends ConsumerState<ForgotPasswordEmailPag
                           onPressed: loading ? null : _submit,
                         ),
 
-                        const SizedBox(height: 20),
-                        TextButton(
-                          onPressed: () => context.go('/login'),
-                          child: const Text('Kembali ke Login'),
-                        )
+                        const SizedBox(height: 16),
+                        
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            debugPrint('🔙 [EMAIL PAGE] Button Kembali ke Login diklik!');
+                            _navigateBackToLogin(context);
+                          },
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Kembali ke Login'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 48),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -408,10 +425,17 @@ class _ForgotPasswordOTPPageState extends ConsumerState<ForgotPasswordOTPPage> {
 
                         const SizedBox(height: 12),
 
-                        TextButton(
-                          onPressed: () => context.go('/login'),
-                          child: const Text('Kembali ke Login'),
-                        )
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            debugPrint('🔙 [OTP PAGE] Button Kembali ke Login diklik!');
+                            _navigateBackToLogin(context);
+                          },
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Kembali ke Login'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 48),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -472,117 +496,47 @@ class _ForgotPasswordNewPassPageState
         newPassword: _passC.text,
       );
 
-      // Kirim password reset email dari Firebase Auth
-      // Ini akan memberikan link untuk user set password via web
-      await otpService.sendPasswordResetLink(widget.email);
-
       if (mounted) {
         setState(() => loading = false);
         
         // Cleanup OTP
         await otpService.deleteOTP(widget.email);
         
-        // Show dialog dengan 2 opsi
+        // Show simple success dialog
+        if (!mounted) return;
+        
         showDialog(
           context: context,
           barrierDismissible: false,
-          builder: (ctx) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(16),
             ),
-            title: Row(
-              children: [
-                Icon(Icons.mark_email_read, color: Colors.blue.shade600, size: 28),
-                const SizedBox(width: 8),
-                const Expanded(child: Text('Password Siap Diupdate')),
-              ],
+            icon: Icon(
+              Icons.check_circle_outline_rounded,
+              color: Colors.green.shade600,
+              size: 64,
             ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Password baru Anda telah tersimpan:',
-                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.green.shade200),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          '${_passC.text.replaceAll(RegExp(r'.'), '•')}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade900,
-                            letterSpacing: 2,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Pilih cara aktivasi password:',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: Colors.blue.shade900,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '1. Login Langsung: Gunakan password baru untuk login\n'
-                        '2. Via Email: Klik link di email untuk konfirmasi',
-                        style: TextStyle(fontSize: 13, color: Colors.blue.shade800),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            title: const Text(
+              'Password Berhasil Diganti',
+              textAlign: TextAlign.center,
+            ),
+            content: const Text(
+              'Password Anda telah berhasil diperbarui.\n\n'
+              'Silakan login dengan password baru Anda.',
+              textAlign: TextAlign.center,
             ),
             actions: [
-              TextButton(
+              FilledButton.icon(
                 onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.go('/login');
+                  Navigator.of(dialogContext).pop();
+                  if (!mounted) return;
+                  _navigateBackToLogin(context);
                 },
-                child: const Text('Login Sekarang'),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  Navigator.of(ctx).pop();
-                  context.go('/login');
-                },
-                icon: const Icon(Icons.login, size: 18),
+                icon: const Icon(Icons.login_rounded),
                 label: const Text('Ke Halaman Login'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
                 ),
               ),
             ],
@@ -734,10 +688,19 @@ class _ForgotPasswordNewPassPageState
                           onPressed: loading ? null : _updatePass,
                         ),
 
-                        TextButton(
-                          onPressed: () => context.go('/login'),
-                          child: const Text('Kembali ke Login'),
-                        )
+                        const SizedBox(height: 16),
+                        
+                        OutlinedButton.icon(
+                          onPressed: () {
+                            debugPrint('🔙 [NEW PASSWORD PAGE] Button Kembali ke Login diklik!');
+                            _navigateBackToLogin(context);
+                          },
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Kembali ke Login'),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size(double.infinity, 48),
+                          ),
+                        ),
                       ],
                     ),
                   ),
