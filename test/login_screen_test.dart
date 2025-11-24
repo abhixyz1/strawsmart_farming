@@ -1,6 +1,8 @@
 // Login Screen Widget Test
 // Uncomment dan jalankan test ini untuk memvalidasi responsive behavior
 
+void main() {}
+
 /*
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

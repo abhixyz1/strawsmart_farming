@@ -39,7 +39,7 @@ class GradientBackground extends StatelessWidget {
             right: -20,
             child: _GlowBlob(
               size: 220,
-              color: const Color(0xFF5EFCE8).withOpacity(0.45),
+              color: const Color(0xFF5EFCE8).withValues(alpha: 0.45),
               intensity: 0.04,
             ),
           ),
@@ -48,7 +48,7 @@ class GradientBackground extends StatelessWidget {
             left: -30,
             child: _GlowBlob(
               size: 260,
-              color: const Color(0xFF736EFE).withOpacity(0.4),
+              color: const Color(0xFF736EFE).withValues(alpha: 0.4),
               intensity: 0.04,
             ),
           ),
@@ -81,7 +81,7 @@ class _GlowBlob extends StatelessWidget {
           gradient: RadialGradient(
             colors: [
               color,
-              color.withOpacity(intensity),
+              color.withValues(alpha: intensity),
             ],
           ),
         ),

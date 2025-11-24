@@ -1,4 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/strawberry_guidance.dart';
 import '../../models/guidance_item.dart';
@@ -65,15 +66,15 @@ class DashboardRepository {
     return _deviceRef.child('info').onValue.map((event) {
       final data = _castSnapshot(event.snapshot.value);
       
-      print('[DashboardRepo] watchPump: path=devices/$deviceId/info, data=$data');
+  debugPrint('[DashboardRepo] watchPump: path=devices/$deviceId/info, data=$data');
       
       if (data == null) {
-        print('[DashboardRepo] watchPump: No data at /info, returning null');
+  debugPrint('[DashboardRepo] watchPump: No data at /info, returning null');
         return null;
       }
       
       final pump = PumpStatusData.fromJson(data);
-      print('[DashboardRepo] watchPump: Parsed pump status=${pump.status}, isOn=${pump.isOn}');
+  debugPrint('[DashboardRepo] watchPump: Parsed pump status=${pump.status}, isOn=${pump.isOn}');
       return pump;
     });
   }

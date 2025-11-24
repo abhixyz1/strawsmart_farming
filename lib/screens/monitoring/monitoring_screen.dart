@@ -99,8 +99,8 @@ class _DatePickerHeader extends ConsumerWidget {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            colorScheme.primaryContainer.withOpacity(0.6),
-            colorScheme.primaryContainer.withOpacity(0.3),
+            colorScheme.primaryContainer.withValues(alpha: 0.6),
+            colorScheme.primaryContainer.withValues(alpha: 0.3),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -129,12 +129,12 @@ class _DatePickerHeader extends ConsumerWidget {
                       color: colorScheme.surface,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: colorScheme.primary.withOpacity(0.4),
+                        color: colorScheme.primary.withValues(alpha: 0.4),
                         width: 2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: colorScheme.primary.withOpacity(0.1),
+                          color: colorScheme.primary.withValues(alpha: 0.1),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
                         ),
@@ -180,7 +180,7 @@ class _DatePickerHeader extends ConsumerWidget {
                 },
                 style: IconButton.styleFrom(
                   backgroundColor: colorScheme.surface,
-                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
                 ),
               ),
               IconButton(
@@ -191,7 +191,7 @@ class _DatePickerHeader extends ConsumerWidget {
                 },
                 style: IconButton.styleFrom(
                   backgroundColor: colorScheme.surface,
-                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
                 ),
               ),
               IconButton(
@@ -205,7 +205,7 @@ class _DatePickerHeader extends ConsumerWidget {
                 },
                 style: IconButton.styleFrom(
                   backgroundColor: colorScheme.surface,
-                  side: BorderSide(color: colorScheme.primary.withOpacity(0.3)),
+                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
                 ),
               ),
             ],
@@ -325,10 +325,10 @@ class _MonitoringContentState extends ConsumerState<_MonitoringContent> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: colorScheme.outline.withOpacity(0.2),
+          color: colorScheme.outline.withValues(alpha: 0.2),
           width: 1,
         ),
       ),
@@ -355,7 +355,7 @@ class _MonitoringContentState extends ConsumerState<_MonitoringContent> {
                 color: colorScheme.surface,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: colorScheme.outline.withOpacity(0.3),
+                  color: colorScheme.outline.withValues(alpha: 0.3),
                   width: 1,
                 ),
               ),

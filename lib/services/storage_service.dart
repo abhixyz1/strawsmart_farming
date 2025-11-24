@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final storageServiceProvider = Provider<StorageService>((ref) {
@@ -34,12 +35,12 @@ class StorageService {
       }
 
       // Log upload attempt
-      print('[StorageService] Uploading profile photo for UID: $uid');
-      print('[StorageService] File size: ${fileSize ~/ 1024} KB');
-      print('[StorageService] Bucket: ${_storage.bucket}');
+  debugPrint('[StorageService] Uploading profile photo for UID: $uid');
+  debugPrint('[StorageService] File size: ${fileSize ~/ 1024} KB');
+  debugPrint('[StorageService] Bucket: ${_storage.bucket}');
 
       final ref = _storage.ref().child('profile_photos/$uid.jpg');
-      print('[StorageService] Storage path: ${ref.fullPath}');
+  debugPrint('[StorageService] Storage path: ${ref.fullPath}');
       
       // Upload the file
       final uploadTask = ref.putFile(
@@ -56,20 +57,20 @@ class StorageService {
       // Monitor upload progress
       uploadTask.snapshotEvents.listen((snapshot) {
         final progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        print('[StorageService] Upload progress: ${progress.toStringAsFixed(1)}%');
+        debugPrint('[StorageService] Upload progress: ${progress.toStringAsFixed(1)}%');
       });
 
       // Wait for upload to complete
-      final snapshot = await uploadTask;
-      print('[StorageService] Upload completed. State: ${snapshot.state}');
+  final snapshot = await uploadTask;
+  debugPrint('[StorageService] Upload completed. State: ${snapshot.state}');
 
       // Get the download URL
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      print('[StorageService] Download URL obtained: $downloadUrl');
+  final downloadUrl = await snapshot.ref.getDownloadURL();
+  debugPrint('[StorageService] Download URL obtained: $downloadUrl');
       
       return downloadUrl;
     } on FirebaseException catch (e) {
-      print('[StorageService] Firebase error: ${e.code} - ${e.message}');
+      debugPrint('[StorageService] Firebase error: ${e.code} - ${e.message}');
       
       // Provide user-friendly error messages
       String errorMessage;
@@ -98,7 +99,7 @@ class StorageService {
       
       throw Exception(errorMessage);
     } catch (e) {
-      print('[StorageService] Unexpected error: $e');
+      debugPrint('[StorageService] Unexpected error: $e');
       throw Exception('Gagal upload foto: $e');
     }
   }
@@ -106,15 +107,15 @@ class StorageService {
   /// Deletes the profile photo for the given user ID.
   Future<void> deleteProfilePhoto(String uid) async {
     try {
-      print('[StorageService] Deleting profile photo for UID: $uid');
+      debugPrint('[StorageService] Deleting profile photo for UID: $uid');
       
       final ref = _storage.ref().child('profile_photos/$uid.jpg');
-      print('[StorageService] Delete path: ${ref.fullPath}');
+      debugPrint('[StorageService] Delete path: ${ref.fullPath}');
       
       await ref.delete();
-      print('[StorageService] Photo deleted successfully');
+      debugPrint('[StorageService] Photo deleted successfully');
     } on FirebaseException catch (e) {
-      print('[StorageService] Delete error: ${e.code} - ${e.message}');
+      debugPrint('[StorageService] Delete error: ${e.code} - ${e.message}');
       
       // Ignore error if file doesn't exist (already deleted)
       if (e.code != 'object-not-found') {
@@ -131,10 +132,10 @@ class StorageService {
         }
         throw Exception(errorMessage);
       } else {
-        print('[StorageService] Photo already deleted or does not exist');
+        debugPrint('[StorageService] Photo already deleted or does not exist');
       }
     } catch (e) {
-      print('[StorageService] Unexpected delete error: $e');
+      debugPrint('[StorageService] Unexpected delete error: $e');
       throw Exception('Gagal hapus foto: $e');
     }
   }

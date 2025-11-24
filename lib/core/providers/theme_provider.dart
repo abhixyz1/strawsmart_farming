@@ -32,7 +32,7 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
         );
       }
     } catch (e) {
-      print('[ThemeModeNotifier] Error loading theme mode: $e');
+  debugPrint('[ThemeModeNotifier] Error loading theme mode: $e');
       // Fallback to system theme if error
       state = ThemeMode.system;
     }
@@ -44,7 +44,7 @@ class ThemeModeNotifier extends StateNotifier<ThemeMode> {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_themeModeKey, mode.name);
     } catch (e) {
-      print('[ThemeModeNotifier] Error saving theme mode: $e');
+  debugPrint('[ThemeModeNotifier] Error saving theme mode: $e');
     }
   }
 

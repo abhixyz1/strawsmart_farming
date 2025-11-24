@@ -22,8 +22,8 @@ class LoginHeader extends StatelessWidget {
             padding: const EdgeInsets.all(6),
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.14),
-              border: Border.all(color: Colors.white.withOpacity(0.35)),
+              color: Colors.white.withValues(alpha: 0.14),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
               boxShadow: const [
                 BoxShadow(
                   color: Color(0x22000000),
@@ -61,7 +61,7 @@ class LoginHeader extends StatelessWidget {
             Text(
               'Satu pintu untuk memantau nutrisi, iklim, dan panen stroberi.',
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: Colors.white.withOpacity(0.88),
+                color: Colors.white.withValues(alpha: 0.88),
               ),
               textAlign: TextAlign.center,
             ),

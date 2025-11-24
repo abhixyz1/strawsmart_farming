@@ -31,7 +31,7 @@ class StrawberryGuidanceSection extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withOpacity(0.5),
+                  color: colorScheme.primaryContainer.withValues(alpha: 0.5),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -92,10 +92,10 @@ class StrawberryGuidanceSection extends ConsumerWidget {
       margin: const EdgeInsets.all(24),
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withOpacity(0.5),
+  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: colorScheme.outline.withOpacity(0.2),
+          color: colorScheme.outline.withValues(alpha: 0.2),
           width: 1,
         ),
       ),
@@ -104,7 +104,7 @@ class StrawberryGuidanceSection extends ConsumerWidget {
           Icon(
             Icons.sensors_off_outlined,
             size: 48,
-            color: colorScheme.onSurfaceVariant.withOpacity(0.5),
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
           ),
           const SizedBox(height: 16),
           Text(
@@ -118,8 +118,8 @@ class StrawberryGuidanceSection extends ConsumerWidget {
           Text(
             'Rekomendasi budidaya akan muncul setelah data sensor tersedia',
             textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant.withOpacity(0.7),
+    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                 ),
           ),
         ],
@@ -222,7 +222,7 @@ class _GuidanceCard extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     height: 1.4,
-                    color: colorScheme.onSurface.withOpacity(0.8),
+                    color: colorScheme.onSurface.withValues(alpha: 0.8),
                   ),
                 ),
 

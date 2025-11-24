@@ -51,7 +51,7 @@ class AppShell extends StatelessWidget {
           color: isDark ? theme.colorScheme.surface : Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 8,
               offset: const Offset(0, -2),
             ),
@@ -63,7 +63,7 @@ class AppShell extends StatelessWidget {
           destinations: destinations,
           backgroundColor: Colors.transparent,
           elevation: 0,
-          indicatorColor: theme.colorScheme.primary.withOpacity(0.15),
+          indicatorColor: theme.colorScheme.primary.withValues(alpha: 0.15),
           indicatorShape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

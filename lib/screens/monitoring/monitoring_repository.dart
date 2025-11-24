@@ -1,4 +1,5 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../dashboard/dashboard_repository.dart';
 
@@ -102,7 +103,7 @@ class MonitoringRepository {
           readings.add(reading);
         } catch (e) {
           // Skip invalid entries
-          print('[MonitoringRepo] Failed to parse reading $key: $e');
+          debugPrint('[MonitoringRepo] Failed to parse reading $key: $e');
         }
       }
     });

@@ -92,11 +92,11 @@ class _OTPInputFieldState extends State<OTPInputField> {
               decoration: InputDecoration(
                 counterText: '',
                 filled: true,
-                fillColor: colorScheme.surface.withOpacity(0.96),
+                fillColor: colorScheme.surface.withValues(alpha: 0.96),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide(
-                    color: colorScheme.outline.withOpacity(0.3),
+                    color: colorScheme.outline.withValues(alpha: 0.3),
                     width: 1.5,
                   ),
                 ),

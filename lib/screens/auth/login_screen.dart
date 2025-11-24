@@ -76,19 +76,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   InputDecorationTheme _buildFieldTheme(ColorScheme colorScheme) {
     final baseBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(LoginConstants.inputBorderRadius),
-      borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.16)),
+  borderSide: BorderSide(color: colorScheme.outline.withValues(alpha: 0.16)),
     );
 
     return InputDecorationTheme(
-      filled: true,
-      fillColor: colorScheme.surface.withOpacity(0.96),
+  filled: true,
+  fillColor: colorScheme.surface.withValues(alpha: 0.96),
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
       labelStyle: TextStyle(
-        color: colorScheme.onSurface.withOpacity(0.75),
+  color: colorScheme.onSurface.withValues(alpha: 0.75),
         fontWeight: FontWeight.w500,
       ),
       hintStyle: TextStyle(
-        color: colorScheme.onSurface.withOpacity(0.5),
+  color: colorScheme.onSurface.withValues(alpha: 0.5),
       ),
       prefixIconColor: colorScheme.primary,
       suffixIconColor: colorScheme.primary,
@@ -296,7 +296,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         Text(
           'Kelola rumah kaca stroberi Anda dengan insight nutrisi, suhu, dan panen yang terpusat.',
           style: theme.textTheme.bodyMedium?.copyWith(
-            color: colorScheme.onSurface.withOpacity(0.7),
+            color: colorScheme.onSurface.withValues(alpha: 0.7),
           ),
         ),
         SizedBox(height: spacing),
@@ -426,12 +426,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // Footer text - hanya tampil di layar medium/large
         if (screenHeight >= LoginConstants.smallScreenHeight) ...[
           SizedBox(height: spacing),
-          Divider(color: colorScheme.outline.withOpacity(0.26)),
+          Divider(color: colorScheme.outline.withValues(alpha: 0.26)),
           SizedBox(height: spacing * 0.75),
           Text(
             'Belum punya akun? Hubungi admin StrawSmart untuk registrasi.',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: colorScheme.onSurface.withOpacity(0.7),
+              color: colorScheme.onSurface.withValues(alpha: 0.7),
             ),
             textAlign: TextAlign.center,
           ),

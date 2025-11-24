@@ -76,20 +76,20 @@ class _ErrorToastState extends State<ErrorToast>
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(LoginConstants.inputBorderRadius),
             border: Border.all(
-              color: Colors.pink.shade300.withOpacity(0.4),
+              color: Colors.pink.shade300.withValues(alpha: 0.4),
               width: 1.5,
             ),
             gradient: LinearGradient(
               colors: [
-                Colors.pink.shade50.withOpacity(0.9),
-                Colors.red.shade50.withOpacity(0.85),
+                Colors.pink.shade50.withValues(alpha: 0.9),
+                Colors.red.shade50.withValues(alpha: 0.85),
               ],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.pink.shade100.withOpacity(0.3),
+                color: Colors.pink.shade100.withValues(alpha: 0.3),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
