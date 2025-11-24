@@ -547,7 +547,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     try {
       await ref.read(dashboardRepositoryProvider).sendPumpCommand(
             turnOn: desiredState,
-            durationSeconds: desiredState ? 30 : 0,
+            durationSeconds: desiredState ? 60 : 0, // 60s for ON, 0 for OFF
           );
       _showSnackBar('Perintah pompa dikirim ke perangkat.');
     } catch (e) {

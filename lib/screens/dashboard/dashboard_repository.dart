@@ -85,10 +85,11 @@ class DashboardRepository {
     });
   }
 
-  Future<void> sendPumpCommand({required bool turnOn, int durationSeconds = 30}) async {
+  Future<void> sendPumpCommand({required bool turnOn, int durationSeconds = 60}) async {
     final controlRef = _deviceRef.child('control');
     final updates = <String, Object?>{
       'pumpRequested': turnOn,
+      // Send 0 when turning OFF, or the specified duration when turning ON
       'durationSeconds': turnOn ? durationSeconds : 0,
       'updatedAt': ServerValue.timestamp,
     };
