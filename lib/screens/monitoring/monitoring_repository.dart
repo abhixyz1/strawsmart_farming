@@ -30,12 +30,23 @@ class MonitoringRepository {
   DatabaseReference get _deviceRef => _database.ref('devices/$deviceId');
 
   /// Watch historical sensor readings untuk tanggal tertentu.
-  /// Format path di Firebase: devices/{deviceId}/history/{yyyy-MM-dd}/{HH:mm:ss}
+  /// New structure: devices/{deviceId}/readings/{timestamp}
+  /// We filter by date range instead of nested date folders
   Stream<List<HistoricalReading>> watchHistoricalReadingsByDate(DateTime date) {
-    // Format tanggal untuk path Firebase (yyyy-MM-dd)
-    final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    // Calculate start and end of day in Unix timestamp (seconds)
+    final startOfDay = DateTime(date.year, date.month, date.day);
+    final endOfDay = startOfDay.add(const Duration(days: 1)).subtract(const Duration(seconds: 1));
     
-    return _deviceRef.child('history/$dateKey').onValue.map((event) {
+    final startTimestamp = startOfDay.millisecondsSinceEpoch ~/ 1000;
+    final endTimestamp = endOfDay.millisecondsSinceEpoch ~/ 1000;
+    
+    return _deviceRef
+        .child('readings')
+        .orderByKey()
+        .startAt(startTimestamp.toString())
+        .endAt(endTimestamp.toString())
+        .onValue
+        .map((event) {
       final data = event.snapshot.value;
       if (data == null) {
         return <HistoricalReading>[];
@@ -44,7 +55,7 @@ class MonitoringRepository {
       final List<HistoricalReading> readings = [];
 
       if (data is Map) {
-        _parseHistoryMap(data, readings, prefix: dateKey);
+        _parseReadingsMap(data, readings);
       }
 
       // Sort by timestamp descending (newest first)
@@ -55,10 +66,9 @@ class MonitoringRepository {
   }
 
   /// Watches historical sensor readings from Firebase Realtime Database.
-  /// Handles both flat structure (history/{timestamp}) and nested (history/{date}/{time}).
-  /// Data difilter untuk menampilkan 1 reading per 5 menit agar tidak terlalu menumpuk.
+  /// New structure uses flat timestamp keys: readings/{timestamp}
   Stream<List<HistoricalReading>> watchHistoricalReadings() {
-    return _deviceRef.child('history').onValue.map((event) {
+    return _deviceRef.child('readings').onValue.map((event) {
       final data = event.snapshot.value;
       if (data == null) {
         return <HistoricalReading>[];
@@ -67,48 +77,32 @@ class MonitoringRepository {
       final List<HistoricalReading> readings = [];
 
       if (data is Map) {
-        _parseHistoryMap(data, readings);
+        _parseReadingsMap(data, readings);
       }
 
       // Sort by timestamp descending (newest first)
       readings.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
-      // Mengembalikan SEMUA data tanpa filtering
-      // Filtering akan dilakukan di UI layer sesuai pilihan user
       return readings;
     });
   }
 
-  /// Recursively parse history map to handle both flat and nested structures.
-  /// For nested date/time keys like "2025-11-16/20:59:54", the prefix carries the date part.
-  void _parseHistoryMap(Map data, List<HistoricalReading> readings, {String prefix = ''}) {
+  /// Parse readings map from new flat structure: readings/{timestamp}/{sensorData}
+  void _parseReadingsMap(Map data, List<HistoricalReading> readings) {
     data.forEach((key, value) {
       if (value is Map) {
-        // Check if this is a reading object (has sensor fields) or a nested date/time structure
-        final hasTemperature = value.containsKey('temperature');
-        final hasTimestamp = value.containsKey('timestamp');
-        final hasSensorData = hasTemperature || value.containsKey('humidity') || 
-                             value.containsKey('soilMoisturePercent');
-
-        if (hasSensorData || hasTimestamp) {
-          // This is a reading object
-          try {
-            final id = prefix.isNotEmpty ? '$prefix/$key' : key.toString();
-            final reading = HistoricalReading.fromJson(
-              id,
-              _castToStringDynamicMap(value),
-              parentKey: prefix,
-              currentKey: key.toString(),
-            );
-            readings.add(reading);
-          } catch (e) {
-            // Skip invalid entries
-          }
-        } else {
-          // This might be a nested structure (e.g., date folder)
-          // Recurse into it
-          final newPrefix = prefix.isNotEmpty ? '$prefix/$key' : key.toString();
-          _parseHistoryMap(value, readings, prefix: newPrefix);
+        try {
+          // Key is the timestamp (Unix seconds)
+          final timestampSeconds = int.tryParse(key.toString());
+          final reading = HistoricalReading.fromJson(
+            key.toString(),
+            _castToStringDynamicMap(value),
+            timestampKey: timestampSeconds,
+          );
+          readings.add(reading);
+        } catch (e) {
+          // Skip invalid entries
+          print('[MonitoringRepo] Failed to parse reading $key: $e');
         }
       }
     });
@@ -119,11 +113,14 @@ class MonitoringRepository {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
+    final startTimestamp = (startDate.millisecondsSinceEpoch ~/ 1000).toString();
+    final endTimestamp = (endDate.millisecondsSinceEpoch ~/ 1000).toString();
+    
     final snapshot = await _deviceRef
-        .child('history')
-        .orderByChild('timestamp')
-        .startAt(startDate.millisecondsSinceEpoch)
-        .endAt(endDate.millisecondsSinceEpoch)
+        .child('readings')
+        .orderByKey()
+        .startAt(startTimestamp)
+        .endAt(endTimestamp)
         .get();
 
     if (!snapshot.exists) {
@@ -134,21 +131,7 @@ class MonitoringRepository {
     final List<HistoricalReading> readings = [];
 
     if (data is Map) {
-      data.forEach((key, value) {
-        if (value is Map) {
-          try {
-            final reading = HistoricalReading.fromJson(
-              key.toString(),
-              _castToStringDynamicMap(value),
-              parentKey: null,
-              currentKey: key.toString(),
-            );
-            readings.add(reading);
-          } catch (e) {
-            // Skip invalid entries
-          }
-        }
-      });
+      _parseReadingsMap(data, readings);
     }
 
     // Sort by timestamp descending
@@ -180,17 +163,26 @@ class HistoricalReading {
     Map<String, dynamic> json, {
     String? parentKey,
     String? currentKey,
+    int? timestampKey,
   }) {
-    // Priority 1: Use timestamp field if present (Firebase stores in seconds, convert to milliseconds)
-    final timestampSeconds = _asInt(json['timestamp']);
-    int timestampMillis = timestampSeconds != null ? timestampSeconds * 1000 : 0;
+    // Priority 1: Use timestampKey if provided (from new structure where key is timestamp)
+    int timestampMillis = 0;
+    if (timestampKey != null) {
+      timestampMillis = timestampKey * 1000; // Convert seconds to milliseconds
+    }
     
-    // Priority 2: Build from parent date key + current time key
+    // Priority 2: Use timestamp field if present
+    if (timestampMillis == 0) {
+      final timestampSeconds = _asInt(json['timestamp']);
+      timestampMillis = timestampSeconds != null ? timestampSeconds * 1000 : 0;
+    }
+    
+    // Priority 3: Build from parent date key + current time key (legacy structure)
     if (timestampMillis == 0 && parentKey != null && currentKey != null) {
       timestampMillis = _parseFromDateTimeKeys(parentKey, currentKey);
     }
     
-    // Priority 3: Parse from combined id string
+    // Priority 4: Parse from combined id string
     if (timestampMillis == 0) {
       timestampMillis = _parseTimestampFromId(id);
     }
@@ -200,13 +192,24 @@ class HistoricalReading {
       timestampMillis = DateTime.now().millisecondsSinceEpoch;
     }
     
+    // Support both old and new field names
+    final tempValue = json.containsKey('temperatureCelsius') 
+        ? json['temperatureCelsius'] 
+        : json['temperature'];
+    final humidValue = json.containsKey('humidityPercent')
+        ? json['humidityPercent']
+        : json['humidity'];
+    final lightValue = json.containsKey('lightIntensityRaw')
+        ? json['lightIntensityRaw']
+        : (json['lightIntensity'] ?? json['light']);
+    
     return HistoricalReading(
       id: id,
       timestamp: DateTime.fromMillisecondsSinceEpoch(timestampMillis),
-      temperature: _asDouble(json['temperature']),
-      humidity: _asDouble(json['humidity']),
+      temperature: _asDouble(tempValue),
+      humidity: _asDouble(humidValue),
       soilMoisturePercent: _asDouble(json['soilMoisturePercent']),
-      lightIntensity: _asDouble(json['lightIntensity'] ?? json['light']),
+      lightIntensity: _asDouble(lightValue),
     );
   }
 

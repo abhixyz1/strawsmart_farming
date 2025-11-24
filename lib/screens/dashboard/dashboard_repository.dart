@@ -50,7 +50,8 @@ class DashboardRepository {
   }
 
   Stream<DeviceStatusData?> watchStatus() {
-    return _deviceRef.child('status').onValue.map((event) {
+    // New structure: info/ contains all device metadata, state, and status
+    return _deviceRef.child('info').onValue.map((event) {
       final data = _castSnapshot(event.snapshot.value);
       if (data == null) {
         return null;
@@ -60,16 +61,14 @@ class DashboardRepository {
   }
 
   Stream<PumpStatusData?> watchPump() {
-    // Device firmware reports live pump state under /state.
-    // Also check /status/pump as fallback for legacy data structure.
-    return _deviceRef.child('state').onValue.map((event) {
+    // New structure: pump state is in info/pumpActive
+    return _deviceRef.child('info').onValue.map((event) {
       final data = _castSnapshot(event.snapshot.value);
       
-      // Debug logging to help troubleshoot pump data
-      print('[DashboardRepo] watchPump: path=devices/$deviceId/state, data=$data');
+      print('[DashboardRepo] watchPump: path=devices/$deviceId/info, data=$data');
       
       if (data == null) {
-        print('[DashboardRepo] watchPump: No data at /state, returning null');
+        print('[DashboardRepo] watchPump: No data at /info, returning null');
         return null;
       }
       
@@ -89,8 +88,8 @@ class DashboardRepository {
   Future<void> sendPumpCommand({required bool turnOn, int durationSeconds = 30}) async {
     final controlRef = _deviceRef.child('control');
     final updates = <String, Object?>{
-      'pump': turnOn,
-      'duration': turnOn ? durationSeconds : 0,
+      'pumpRequested': turnOn,
+      'durationSeconds': turnOn ? durationSeconds : 0,
       'updatedAt': ServerValue.timestamp,
     };
     await controlRef.update(updates);
@@ -149,14 +148,25 @@ class SensorSnapshot {
   final int? timestampMillis;
 
   factory SensorSnapshot.fromJson(Map<String, dynamic> json) {
-    final lightRaw = json.containsKey('lightIntensity')
-        ? json['lightIntensity']
-        : json['light'];
+    // New structure uses clearer field names
+    final tempValue = json.containsKey('temperatureCelsius') 
+        ? json['temperatureCelsius'] 
+        : json['temperature'];
+    final humidValue = json.containsKey('humidityPercent')
+        ? json['humidityPercent']
+        : json['humidity'];
+    final soilRaw = json.containsKey('soilMoistureRaw')
+        ? json['soilMoistureRaw']
+        : json['soilMoistureADC'];
+    final lightRaw = json.containsKey('lightIntensityRaw')
+        ? json['lightIntensityRaw']
+        : (json.containsKey('lightIntensity') ? json['lightIntensity'] : json['light']);
+    
     return SensorSnapshot(
-      temperature: _asDouble(json['temperature']),
-      humidity: _asDouble(json['humidity']),
+      temperature: _asDouble(tempValue),
+      humidity: _asDouble(humidValue),
       soilMoisturePercent: _asDouble(json['soilMoisturePercent']),
-      soilMoistureAdc: _asInt(json['soilMoistureADC']),
+      soilMoistureAdc: _asInt(soilRaw),
       lightIntensity: _asInt(lightRaw),
       timestampMillis: _asInt(json['timestamp']),
     );
@@ -218,13 +228,20 @@ class DeviceStatusData {
   }
 
   factory DeviceStatusData.fromJson(Map<String, dynamic> json) {
+    // New structure uses clearer field names
+    final onlineValue = json.containsKey('isOnline') ? json['isOnline'] : json['online'];
+    final lastSeenValue = json.containsKey('lastSeenAt') ? json['lastSeenAt'] : json['lastSeen'];
+    final wifiValue = json.containsKey('wifiSignalDbm') ? json['wifiSignalDbm'] : json['wifiSignalStrength'];
+    final uptimeValue = json.containsKey('uptimeSeconds') ? json['uptimeSeconds'] : json['uptime'];
+    final memoryValue = json.containsKey('freeMemoryBytes') ? json['freeMemoryBytes'] : json['freeMemory'];
+    
     return DeviceStatusData(
-      online: json['online'] == true,
-      lastSeenMillis: _asInt(json['lastSeen']),
-      wifiSignalStrength: _asInt(json['wifiSignalStrength']),
-      freeMemory: _asInt(json['freeMemory']),
-      uptimeMillis: _asInt(json['uptime']),
-      autoLogicEnabled: json['autoLogicEnabled'] == true,
+      online: onlineValue == true,
+      lastSeenMillis: _asInt(lastSeenValue),
+      wifiSignalStrength: _asInt(wifiValue),
+      freeMemory: _asInt(memoryValue),
+      uptimeMillis: _asInt(uptimeValue),
+      autoLogicEnabled: json['autoModeEnabled'] == true || json['autoLogicEnabled'] == true,
     );
   }
 }
@@ -241,7 +258,11 @@ class PumpStatusData {
   bool get isOn => status.toUpperCase() == 'ON';
 
   factory PumpStatusData.fromJson(Map<String, dynamic> json) {
-    final bool? pumpFlag = json['pump'] is bool ? json['pump'] as bool : null;
+    // New structure uses 'pumpActive' field
+    final bool? pumpFlag = json.containsKey('pumpActive') 
+        ? (json['pumpActive'] is bool ? json['pumpActive'] as bool : null)
+        : (json['pump'] is bool ? json['pump'] as bool : null);
+    
     final String resolvedStatus;
     final rawStatus = json['status']?.toString();
     if (rawStatus != null && rawStatus.isNotEmpty) {
@@ -251,7 +272,8 @@ class PumpStatusData {
     } else {
       resolvedStatus = 'OFF';
     }
-    final lastChange = _asInt(json['lastChange'] ?? json['lastSync']);
+    
+    final lastChange = _asInt(json['lastChange'] ?? json['lastSync'] ?? json['lastSeenAt']);
     return PumpStatusData(
       status: resolvedStatus,
       lastChangeMillis: lastChange,
