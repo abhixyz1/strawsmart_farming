@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
+import 'auth_repository.dart'; // Import otpServiceProvider dari sini
+import 'validators/password_validator.dart';
 import 'widgets/glass_card.dart';
 import 'widgets/primary_button.dart';
 import 'widgets/gradient_background.dart';
 import 'widgets/error_toast.dart';
+import 'widgets/otp_input_field.dart';
 
-class ForgotPasswordEmailPage extends StatefulWidget {
+class ForgotPasswordEmailPage extends ConsumerStatefulWidget {
   const ForgotPasswordEmailPage({super.key});
 
   @override
-  State<ForgotPasswordEmailPage> createState() =>
+  ConsumerState<ForgotPasswordEmailPage> createState() =>
       _ForgotPasswordEmailPageState();
 }
 
-class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
+class _ForgotPasswordEmailPageState extends ConsumerState<ForgotPasswordEmailPage> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _emailC = TextEditingController();
   String? _error;
@@ -52,12 +56,36 @@ class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
       _error = null;
     });
 
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final otpService = ref.read(otpServiceProvider);
+      
+      // Generate dan kirim OTP
+      await otpService.generateAndSendOTP(_emailC.text.trim());
 
-    if (mounted) {
-      setState(() => loading = false);
-      context.push('/forgot/otp');
+      if (mounted) {
+        setState(() => loading = false);
+        
+        // Navigate ke halaman OTP dengan email sebagai argumen
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => ForgotPasswordOTPPage(email: _emailC.text.trim()),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+          _error = 'Gagal mengirim OTP. Periksa koneksi internet Anda.';
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    _emailC.dispose();
+    super.dispose();
   }
 
   @override
@@ -92,12 +120,13 @@ class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
                               ),
                         const SizedBox(height: 8),
                         Text(
-                          'Masukkan email untuk mengubah kata sandi',
+                          'Masukkan email untuk menerima kode OTP',
                           style: theme.textTheme.bodyMedium
                               ?.copyWith(color: cs.onSurface.withOpacity(0.7)),
                         ),
                         const SizedBox(height: 24),
 
+                        // Error message
                         if (_error != null)
                           ErrorToast(
                             message: _error!,
@@ -137,7 +166,7 @@ class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
                         const SizedBox(height: 24),
 
                         PrimaryButton(
-                          label: 'Kirim OTP',
+                          label: 'Kirim Kode OTP',
                           loadingLabel: 'Mengirim...',
                           loading: loading,
                           onPressed: loading ? null : _submit,
@@ -165,21 +194,52 @@ class _ForgotPasswordEmailPageState extends State<ForgotPasswordEmailPage> {
 }
 
 
-class ForgotPasswordOTPPage extends StatefulWidget {
-  const ForgotPasswordOTPPage({super.key});
+class ForgotPasswordOTPPage extends ConsumerStatefulWidget {
+  const ForgotPasswordOTPPage({required this.email, super.key});
+
+  final String email;
 
   @override
-  State<ForgotPasswordOTPPage> createState() => _ForgotPasswordOTPPageState();
+  ConsumerState<ForgotPasswordOTPPage> createState() => _ForgotPasswordOTPPageState();
 }
 
-class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
-  final _otpC = TextEditingController();
+class _ForgotPasswordOTPPageState extends ConsumerState<ForgotPasswordOTPPage> {
+  String _currentOTP = '';
   String? _error;
   bool loading = false;
+  int _countdown = 60; // 60 seconds countdown untuk resend
+  bool _canResend = false;
 
-  Future<void> _verify() async {
-    if (_otpC.text.length != 4) {
-      setState(() => _error = 'Kode harus 4 digit');
+  @override
+  void initState() {
+    super.initState();
+    _startCountdown();
+  }
+
+  void _startCountdown() {
+    setState(() {
+      _countdown = 60;
+      _canResend = false;
+    });
+
+    Future.doWhile(() async {
+      await Future.delayed(const Duration(seconds: 1));
+      if (mounted) {
+        setState(() {
+          _countdown--;
+          if (_countdown <= 0) {
+            _canResend = true;
+          }
+        });
+        return _countdown > 0;
+      }
+      return false;
+    });
+  }
+
+  Future<void> _verify(String otp) async {
+    if (otp.length != 6) {
+      setState(() => _error = 'Kode OTP harus 6 digit');
       return;
     }
 
@@ -188,21 +248,70 @@ class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
       _error = null;
     });
 
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      final otpService = ref.read(otpServiceProvider);
+      final isValid = await otpService.verifyOTP(
+        email: widget.email,
+        otp: otp,
+      );
 
-    if (_otpC.text == "1234") {
+      if (mounted) {
+        if (isValid) {
+          setState(() => loading = false);
+          
+          // Navigate ke halaman ganti password
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(
+              builder: (_) => ForgotPasswordNewPassPage(email: widget.email),
+            ),
+          );
+        } else {
+          setState(() {
+            loading = false;
+            _error = 'Kode OTP salah atau sudah kadaluarsa. Silakan coba lagi.';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+          _error = 'Terjadi kesalahan. Periksa koneksi internet Anda.';
+        });
+      }
+    }
+  }
+
+  Future<void> _resendOTP() async {
+    if (!_canResend) return;
+
+    setState(() {
+      loading = true;
+      _error = null;
+    });
+
+    try {
+      final otpService = ref.read(otpServiceProvider);
+      await otpService.generateAndSendOTP(widget.email);
+
       if (mounted) {
         setState(() => loading = false);
+        _startCountdown();
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Verifikasi berhasil')),
+          SnackBar(
+            content: Text('Kode OTP baru telah dikirim ke ${widget.email}'),
+            backgroundColor: Colors.green.shade700,
+          ),
         );
-        context.push('/forgot/newpass');
       }
-    } else {
-      setState(() {
-        loading = false;
-        _error = 'Kode salah';
-      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+          _error = 'Gagal mengirim ulang OTP. Coba lagi.';
+        });
+      }
     }
   }
 
@@ -231,15 +340,16 @@ class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
                           child: Column(
                             children: [
                         Text(
-                          'Ubah Kata Sandi',
+                          'Verifikasi Kode OTP',
                           style: theme.textTheme.headlineSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Masukkan 4 digit kode OTP',
+                          'Masukkan 6 digit kode OTP yang telah dikirim ke ${widget.email}',
                           style: theme.textTheme.bodyMedium
                               ?.copyWith(color: cs.onSurface.withOpacity(0.7)),
+                          textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 24),
 
@@ -249,32 +359,58 @@ class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
                             onDismiss: () => setState(() => _error = null),
                           ),
 
-                        TextField(
-                          controller: _otpC,
-                          keyboardType: TextInputType.number,
-                          maxLength: 4,
-                          textAlign: TextAlign.center,
-                          decoration: InputDecoration(
-                            counterText: '',
-                            filled: true,
-                            fillColor: cs.surface.withOpacity(0.96),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
+                        const SizedBox(height: 16),
+
+                        // OTP Input Field (6 kotak)
+                        OTPInputField(
+                          onCompleted: (otp) {
+                            setState(() => _currentOTP = otp);
+                            if (!loading) {
+                              _verify(otp);
+                            }
+                          },
+                          onChanged: (otp) {
+                            setState(() {
+                              _currentOTP = otp;
+                              _error = null; // Clear error saat user mulai ketik
+                            });
+                          },
                         ),
+
                         const SizedBox(height: 24),
 
-                        PrimaryButton(
-                          label: 'Verifikasi Kode',
-                          loadingLabel: 'Memverifikasi...',
-                          loading: loading,
-                          onPressed: loading ? null : _verify,
-                        ),
+                        // Loading indicator atau verify button
+                        if (loading)
+                          const CircularProgressIndicator()
+                        else if (_currentOTP.length == 6)
+                          PrimaryButton(
+                            label: 'Verifikasi Kode',
+                            loadingLabel: 'Verifikasi...',
+                            loading: false,
+                            onPressed: () => _verify(_currentOTP),
+                          ),
+
+                        const SizedBox(height: 20),
+
+                        // Resend OTP dengan countdown
+                        if (_canResend)
+                          TextButton(
+                            onPressed: loading ? null : _resendOTP,
+                            child: const Text('Kirim Ulang Kode OTP'),
+                          )
+                        else
+                          Text(
+                            'Kirim ulang dalam $_countdown detik',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.onSurface.withOpacity(0.6),
+                            ),
+                          ),
+
+                        const SizedBox(height: 12),
 
                         TextButton(
-                          onPressed: () => context.pop(),
-                          child: const Text('Kembali'),
+                          onPressed: () => context.go('/login'),
+                          child: const Text('Kembali ke Login'),
                         )
                       ],
                     ),
@@ -292,35 +428,174 @@ class _ForgotPasswordOTPPageState extends State<ForgotPasswordOTPPage> {
   }
 }
 
-class ForgotPasswordNewPassPage extends StatefulWidget {
-  const ForgotPasswordNewPassPage({super.key});
+class ForgotPasswordNewPassPage extends ConsumerStatefulWidget {
+  const ForgotPasswordNewPassPage({required this.email, super.key});
+
+  final String email;
 
   @override
-  State<ForgotPasswordNewPassPage> createState() =>
+  ConsumerState<ForgotPasswordNewPassPage> createState() =>
       _ForgotPasswordNewPassPageState();
 }
 
 class _ForgotPasswordNewPassPageState
-    extends State<ForgotPasswordNewPassPage> {
+    extends ConsumerState<ForgotPasswordNewPassPage> {
   final _formKey = GlobalKey<FormState>();
   final _passC = TextEditingController();
   final _confirmC = TextEditingController();
+  String? _error;
   bool loading = false;
   bool _obscure = true;
   bool _obscure2 = true;
 
+  @override
+  void dispose() {
+    _passC.dispose();
+    _confirmC.dispose();
+    super.dispose();
+  }
+
   Future<void> _updatePass() async {
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() => loading = true);
-    await Future.delayed(const Duration(seconds: 1));
+    setState(() {
+      loading = true;
+      _error = null;
+    });
 
-    if (mounted) {
-      setState(() => loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Kata sandi berhasil diperbarui')),
+    try {
+      final otpService = ref.read(otpServiceProvider);
+      
+      // Simpan password sementara ke RTDB
+      await otpService.saveNewPassword(
+        email: widget.email,
+        newPassword: _passC.text,
       );
-      context.go('/login');
+
+      // Kirim password reset email dari Firebase Auth
+      // Ini akan memberikan link untuk user set password via web
+      await otpService.sendPasswordResetLink(widget.email);
+
+      if (mounted) {
+        setState(() => loading = false);
+        
+        // Cleanup OTP
+        await otpService.deleteOTP(widget.email);
+        
+        // Show dialog dengan 2 opsi
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            title: Row(
+              children: [
+                Icon(Icons.mark_email_read, color: Colors.blue.shade600, size: 28),
+                const SizedBox(width: 8),
+                const Expanded(child: Text('Password Siap Diupdate')),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Password baru Anda telah tersimpan:',
+                  style: TextStyle(fontWeight: FontWeight.w500, fontSize: 15),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.green.shade200),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.green.shade700, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          '${_passC.text.replaceAll(RegExp(r'.'), '•')}',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green.shade900,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue.shade700, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Pilih cara aktivasi password:',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: Colors.blue.shade900,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        '1. Login Langsung: Gunakan password baru untuk login\n'
+                        '2. Via Email: Klik link di email untuk konfirmasi',
+                        style: TextStyle(fontSize: 13, color: Colors.blue.shade800),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.go('/login');
+                },
+                child: const Text('Login Sekarang'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  context.go('/login');
+                },
+                icon: const Icon(Icons.login, size: 18),
+                label: const Text('Ke Halaman Login'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          loading = false;
+          _error = 'Gagal menyimpan password. Silakan coba lagi.';
+        });
+      }
     }
   }
 
@@ -375,7 +650,41 @@ class _ForgotPasswordNewPassPageState
                           style: theme.textTheme.bodyMedium
                               ?.copyWith(color: cs.onSurface.withOpacity(0.7)),
                         ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Untuk akun: ${widget.email}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: cs.primary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                         const SizedBox(height: 24),
+
+                        if (_error != null)
+                          Container(
+                            margin: const EdgeInsets.only(bottom: 16),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              border: Border.all(color: Colors.red.shade300),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _error!,
+                                    style: TextStyle(
+                                      color: Colors.red.shade700,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
 
                         Form(
                           key: _formKey,
@@ -385,19 +694,14 @@ class _ForgotPasswordNewPassPageState
                                 controller: _passC,
                                 obscureText: _obscure,
                                 decoration: _dec(
-                                  'Kata Sandi',
+                                  'Kata Sandi Baru',
                                   _obscure,
                                   () => setState(() => _obscure = !_obscure),
+                                ).copyWith(
+                                  helperText: PasswordValidator.helperText,
+                                  helperMaxLines: 2,
                                 ),
-                                validator: (v) {
-                                  if (v == null || v.isEmpty) {
-                                    return 'Kata sandi wajib diisi.';
-                                  }
-                                  if (v.length < 6) {
-                                    return 'Minimal 6 karakter.';
-                                  }
-                                  return null;
-                                },
+                                validator: PasswordValidator.validate,
                               ),
                               const SizedBox(height: 20),
                               TextFormField(
@@ -409,8 +713,11 @@ class _ForgotPasswordNewPassPageState
                                   () => setState(() => _obscure2 = !_obscure2),
                                 ),
                                 validator: (v) {
+                                  if (v == null || v.isEmpty) {
+                                    return 'Konfirmasi kata sandi diperlukan';
+                                  }
                                   if (v != _passC.text) {
-                                    return 'Kata sandi tidak sama.';
+                                    return 'Kata sandi tidak cocok';
                                   }
                                   return null;
                                 },
