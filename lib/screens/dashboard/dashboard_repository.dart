@@ -3,9 +3,15 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/strawberry_guidance.dart';
 import '../../models/guidance_item.dart';
+import '../greenhouse/greenhouse_repository.dart';
 
 /// Device ID that Flutter dashboard should subscribe to.
-final dashboardDeviceIdProvider = Provider<String>((_) => 'greenhouse_node_001');
+/// Sekarang mengambil dari activeDeviceIdProvider (selected greenhouse)
+/// Fallback ke 'greenhouse_node_001' jika belum ada pilihan
+final dashboardDeviceIdProvider = Provider<String>((ref) {
+  final activeDeviceId = ref.watch(activeDeviceIdProvider);
+  return activeDeviceId ?? 'greenhouse_node_001';
+});
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
   final database = FirebaseDatabase.instance;

@@ -5,12 +5,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/user_profile_repository.dart';
+import '../greenhouse/greenhouse_repository.dart';
 import '../monitoring/monitoring_screen.dart';
 import '../profile/profile_screen.dart';
 import '../logs/logs_screen.dart';
 import '../../core/widgets/app_shell.dart';
 import '../../core/widgets/schedule_status_card.dart';
 import '../../services/schedule_executor_service.dart';
+import '../../widgets/greenhouse_selector.dart';
 import 'dashboard_repository.dart';
 import 'widgets/strawberry_guidance_section.dart';
 
@@ -590,7 +592,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
 }
 
-class _DashboardAppBar extends StatelessWidget {
+class _DashboardAppBar extends ConsumerWidget {
   const _DashboardAppBar({
     required this.title,
   });
@@ -598,40 +600,89 @@ class _DashboardAppBar extends StatelessWidget {
   final String title;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final shouldShowSelector = ref.watch(shouldShowGreenhouseSelectorProvider);
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       color: Theme.of(context).colorScheme.surface,
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Text(
-                'StrawSmart Dashboard',
-                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                      .onSurfaceVariant
-                      .withAlpha((255 * 0.7).round()),
-                    ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'StrawSmart Dashboard',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: Theme.of(context)
+                              .colorScheme
+                          .onSurfaceVariant
+                          .withAlpha((255 * 0.7).round()),
+                        ),
+                  ),
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                ],
               ),
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w700,
-                    ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Notifikasi',
+                icon: const Icon(Icons.notifications_outlined),
+                onPressed: () {},
               ),
             ],
           ),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Notifikasi',
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {},
-          ),
+          // Greenhouse selector - hanya tampil untuk admin/owner dengan >1 GH
+          if (shouldShowSelector) ...[
+            const SizedBox(height: 12),
+            const GreenhouseSelector(),
+          ] else ...[
+            // Tampilkan nama greenhouse aktif untuk semua user
+            const SizedBox(height: 8),
+            const _SingleGreenhouseChip(),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Chip kecil untuk menampilkan greenhouse aktif
+class _SingleGreenhouseChip extends ConsumerWidget {
+  const _SingleGreenhouseChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selected = ref.watch(selectedGreenhouseProvider);
+    
+    if (selected == null) return const SizedBox.shrink();
+    
+    return Row(
+      children: [
+        Icon(
+          Icons.location_on_outlined,
+          size: 14,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            selected.displayName,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w500,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -819,7 +870,7 @@ class _SensorStatusCard extends StatelessWidget {
   }
 }
 
-class _PumpStatusCard extends StatelessWidget {
+class _PumpStatusCard extends ConsumerWidget {
   const _PumpStatusCard({
     required this.status,
     required this.pump,
@@ -843,14 +894,18 @@ class _PumpStatusCard extends StatelessWidget {
   final VoidCallback onRefresh;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final online = status?.isDeviceOnline ?? false;
     final connectionLabel = status?.connectionStatusLabel ?? 'Status tidak diketahui';
     final wifi = status?.wifiSignalStrength;
     final autoLogic = status?.autoLogicEnabled ?? false;
-    final canTogglePump = !isSendingPump && online;
+    
+    // Get user role for permission check
+    final profile = ref.watch(currentUserProfileProvider).valueOrNull;
+    final canControlPump = profile?.role.canControlPump ?? false;
+    final canTogglePump = !isSendingPump && online && canControlPump;
 
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -873,10 +928,41 @@ class _PumpStatusCard extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                Switch.adaptive(
-                  value: pump.isOn,
-                  onChanged: canTogglePump ? onPumpToggle : null,
-                ),
+                // Owner hanya bisa lihat status, tidak bisa toggle
+                if (canControlPump)
+                  Switch.adaptive(
+                    value: pump.isOn,
+                    onChanged: canTogglePump ? onPumpToggle : null,
+                  )
+                else
+                  // Status indicator untuk Owner (view only)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: pump.isOn 
+                          ? Colors.green.withAlpha((255 * 0.15).round())
+                          : Colors.grey.withAlpha((255 * 0.15).round()),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          pump.isOn ? Icons.power : Icons.power_off,
+                          size: 16,
+                          color: pump.isOn ? Colors.green[700] : Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          pump.isOn ? 'AKTIF' : 'MATI',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: pump.isOn ? Colors.green[700] : Colors.grey[600],
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
               ],
             ),
             const SizedBox(height: 12),
@@ -900,30 +986,61 @@ class _PumpStatusCard extends StatelessWidget {
               'Mode kontrol: ${controlMode.label} (${controlMode == ControlMode.auto ? 'fuzzy logic aktif' : 'manual override'})',
               style: theme.textTheme.bodyMedium,
             ),
-            const SizedBox(height: 16),
-            SegmentedButton<ControlMode>(
-              segments: const [
-                ButtonSegment(
-                  value: ControlMode.auto,
-                  icon: Icon(Icons.smart_toy_outlined),
-                  label: Text('Auto'),
+            // Hanya tampilkan kontrol mode untuk user yang bisa kontrol pompa
+            if (canControlPump) ...[
+              const SizedBox(height: 16),
+              SegmentedButton<ControlMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: ControlMode.auto,
+                    icon: Icon(Icons.smart_toy_outlined),
+                    label: Text('Auto'),
+                  ),
+                  ButtonSegment(
+                    value: ControlMode.manual,
+                    icon: Icon(Icons.touch_app_outlined),
+                    label: Text('Manual'),
+                  ),
+                ],
+                selected: {controlMode},
+                onSelectionChanged: isUpdatingMode
+                    ? null
+                    : (selection) {
+                        final target = selection.first;
+                        if (target != controlMode) {
+                          onModeChange(target);
+                        }
+                      },
+              ),
+            ] else ...[
+              // Info box untuk Owner (view only)
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceContainerHighest.withAlpha((255 * 0.5).round()),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                ButtonSegment(
-                  value: ControlMode.manual,
-                  icon: Icon(Icons.touch_app_outlined),
-                  label: Text('Manual'),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.visibility_outlined,
+                      size: 18,
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Mode monitoring - Anda hanya dapat melihat status pompa',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-              selected: {controlMode},
-              onSelectionChanged: isUpdatingMode
-                  ? null
-                  : (selection) {
-                      final target = selection.first;
-                      if (target != controlMode) {
-                        onModeChange(target);
-                      }
-                    },
-            ),
+              ),
+            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 10,

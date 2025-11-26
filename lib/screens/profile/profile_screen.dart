@@ -1,11 +1,15 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../models/user_role.dart';
+import '../../core/utils/greenhouse_setup_helper.dart';
 import '../auth/auth_controller.dart';
 import '../auth/user_profile_repository.dart';
+import '../admin/user_management_screen.dart';
 import 'profile_controller.dart';
 import '../../core/providers/theme_provider.dart';
 
@@ -58,6 +62,9 @@ class _SettingsView extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _AccountHeader(profile: profile),
+              const SizedBox(height: 16),
+              // Role badge
+              _UserRoleBadge(profile: profile),
               const SizedBox(height: 24),
               if (isWide)
                 const Row(
@@ -76,6 +83,9 @@ class _SettingsView extends ConsumerWidget {
                     _SecuritySection(),
                   ],
                 ),
+              const SizedBox(height: 16),
+              // Development section for setup
+              const _DevelopmentSection(),
               const SizedBox(height: 32),
               _LogoutButton(onLogout: () {
                 ref.read(authControllerProvider.notifier).signOut();
@@ -767,5 +777,349 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
         );
       },
     );
+  }
+}
+
+// ==================== USER ROLE BADGE ====================
+
+class _UserRoleBadge extends StatelessWidget {
+  const _UserRoleBadge({required this.profile});
+
+  final UserProfile? profile;
+
+  @override
+  Widget build(BuildContext context) {
+    if (profile == null) return const SizedBox.shrink();
+
+    final role = profile!.role;
+    final Color badgeColor;
+    final IconData badgeIcon;
+
+    switch (role) {
+      case UserRole.admin:
+        badgeColor = Colors.purple;
+        badgeIcon = Icons.admin_panel_settings;
+        break;
+      case UserRole.owner:
+        badgeColor = Colors.blue;
+        badgeIcon = Icons.business;
+        break;
+      case UserRole.petani:
+        badgeColor = Colors.green;
+        badgeIcon = Icons.agriculture;
+        break;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: badgeColor.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: badgeColor.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(badgeIcon, color: badgeColor, size: 20),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Role: ${role.label}',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: badgeColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+                Text(
+                  _getRoleDescription(role),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _getRoleDescription(UserRole role) {
+    // Gunakan deskripsi dari model UserRole
+    return role.description;
+  }
+}
+
+// ==================== DEVELOPMENT SECTION ====================
+
+class _DevelopmentSection extends ConsumerStatefulWidget {
+  const _DevelopmentSection();
+
+  @override
+  ConsumerState<_DevelopmentSection> createState() => _DevelopmentSectionState();
+}
+
+class _DevelopmentSectionState extends ConsumerState<_DevelopmentSection> {
+  bool _isLoading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    // Hanya tampilkan di debug mode DAN hanya untuk Admin
+    if (!kDebugMode) return const SizedBox.shrink();
+    
+    final profile = ref.watch(currentUserProfileProvider).valueOrNull;
+    if (profile == null) return const SizedBox.shrink();
+    
+    // Hanya Admin yang bisa akses Development Tools
+    if (!profile.role.canAccessDevTools) return const SizedBox.shrink();
+
+    return _SettingsCard(
+      title: 'Development Tools',
+      icon: Icons.developer_mode,
+      children: [
+        // User Management UI
+        _SettingsTile(
+          icon: Icons.people,
+          title: 'Kelola Pengguna',
+          subtitle: 'Assign user ke greenhouse & ubah role',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const UserManagementScreen(),
+            ),
+          ),
+        ),
+        const Divider(height: 16),
+        _SettingsTile(
+          icon: Icons.sync,
+          title: 'Sync Devices dari RTDB',
+          subtitle: 'Buat data devices di Firestore',
+          trailing: _isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : null,
+          onTap: _isLoading ? null : _syncGreenhouses,
+        ),
+        _SettingsTile(
+          icon: Icons.add_business,
+          title: 'Setup Data Development',
+          subtitle: 'Assign user ke semua devices',
+          onTap: _isLoading ? null : _setupDevelopmentData,
+        ),
+        _SettingsTile(
+          icon: Icons.group_add,
+          title: 'Assign Semua Device ke Saya',
+          subtitle: 'Tambahkan semua devices ke membership saya',
+          onTap: _isLoading ? null : _assignAllDevicesToMe,
+        ),
+        const Divider(height: 16),
+        _SettingsTile(
+          icon: Icons.admin_panel_settings,
+          title: 'Set Sebagai Admin',
+          subtitle: 'Ubah role menjadi admin',
+          onTap: _isLoading ? null : () => _setRole(UserRole.admin),
+        ),
+        _SettingsTile(
+          icon: Icons.business,
+          title: 'Set Sebagai Owner',
+          subtitle: 'Ubah role menjadi owner',
+          onTap: _isLoading ? null : () => _setRole(UserRole.owner),
+        ),
+        _SettingsTile(
+          icon: Icons.agriculture,
+          title: 'Set Sebagai Petani',
+          subtitle: 'Ubah role menjadi petani',
+          onTap: _isLoading ? null : () => _setRole(UserRole.petani),
+        ),
+        const Divider(height: 16),
+        _SettingsTile(
+          icon: Icons.delete_sweep,
+          title: 'Clear Memberships Saya',
+          subtitle: 'Hapus semua membership (untuk testing)',
+          onTap: _isLoading ? null : _clearMyMemberships,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _syncGreenhouses() async {
+    setState(() => _isLoading = true);
+    try {
+      final helper = GreenhouseSetupHelper();
+      final ids = await helper.syncGreenhousesFromRTDB();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Synced ${ids.length} devices')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _setupDevelopmentData() async {
+    final profile = ref.read(currentUserProfileProvider).valueOrNull;
+    if (profile == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final helper = GreenhouseSetupHelper();
+      await helper.setupDevelopmentData(profile.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Development data setup complete!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _assignAllDevicesToMe() async {
+    final profile = ref.read(currentUserProfileProvider).valueOrNull;
+    if (profile == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final helper = GreenhouseSetupHelper();
+      
+      // Sync dulu dari RTDB
+      await helper.syncGreenhousesFromRTDB();
+      
+      // Get semua devices
+      final devices = await helper.getAllDevices();
+      
+      // Assign ke user dengan role sesuai profile
+      for (final device in devices) {
+        try {
+          await helper.assignUserToGreenhouse(
+            userId: profile.id,
+            greenhouseId: device['id'] as String,
+            role: profile.role,
+          );
+        } catch (e) {
+          debugPrint('Error assigning device ${device['id']}: $e');
+        }
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Assigned ${devices.length} devices ke akun Anda')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _clearMyMemberships() async {
+    final profile = ref.read(currentUserProfileProvider).valueOrNull;
+    if (profile == null) return;
+
+    // Konfirmasi dulu
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Memberships?'),
+        content: const Text('Ini akan menghapus semua akses Anda ke greenhouse. Anda harus meminta admin untuk menambahkan kembali.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Batal'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final helper = GreenhouseSetupHelper();
+      final memberships = await helper.getUserMemberships(profile.id);
+      
+      for (final membership in memberships) {
+        await helper.removeUserFromGreenhouse(
+          userId: profile.id,
+          greenhouseId: membership['greenhouseId'] as String,
+        );
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Cleared ${memberships.length} memberships')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _setRole(UserRole role) async {
+    final profile = ref.read(currentUserProfileProvider).valueOrNull;
+    if (profile == null) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final helper = GreenhouseSetupHelper();
+      switch (role) {
+        case UserRole.admin:
+          await helper.setUserAsAdmin(profile.id);
+          break;
+        case UserRole.owner:
+          await helper.setUserAsOwner(profile.id);
+          break;
+        case UserRole.petani:
+          await helper.setUserAsPetani(profile.id);
+          break;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Role diubah menjadi ${role.label}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 }

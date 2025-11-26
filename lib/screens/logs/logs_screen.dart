@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../monitoring/monitoring_repository.dart';
@@ -334,7 +335,7 @@ class _DownloadPlaceholder extends StatelessWidget {
                       ),
                 ),
                 Text(
-                  'Fitur download akan tersedia segera',
+                  'Download laporan dalam format PDF atau CSV',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -344,15 +345,10 @@ class _DownloadPlaceholder extends StatelessWidget {
           ),
           FilledButton.tonalIcon(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Fitur ekspor akan tersedia segera'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              context.pushNamed('report');
             },
             icon: const Icon(Icons.file_download_outlined, size: 18),
-            label: const Text('Download'),
+            label: const Text('Export'),
           ),
         ],
       ),
