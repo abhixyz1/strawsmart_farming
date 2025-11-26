@@ -7,6 +7,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/schedule/watering_schedule_screen.dart';
+import 'screens/report/report_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authStateProvider);
@@ -34,6 +35,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/schedule',
         name: 'schedule',
         builder: (context, state) => const WateringScheduleScreen(),
+      ),
+      GoRoute(
+        path: '/report',
+        name: 'report',
+        builder: (context, state) => const ReportScreen(),
       ),
     ],
     redirect: (context, state) {
