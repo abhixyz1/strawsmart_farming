@@ -174,7 +174,8 @@ final scheduleExecutorServiceProvider = Provider.autoDispose<ScheduleExecutorSer
   if (nextSchedule == null) return null;
 
   final db = FirebaseDatabase.instance;
-  const deviceId = 'greenhouse_node_001'; // TODO: ganti dengan activeDeviceIdProvider
+  // Gunakan deviceId dari selected greenhouse
+  final deviceId = ref.watch(dashboardDeviceIdProvider);
 
   final service = ScheduleExecutorService(
     deviceId: deviceId,
@@ -190,7 +191,8 @@ final scheduleExecutorServiceProvider = Provider.autoDispose<ScheduleExecutorSer
 /// Provider untuk status eksekusi jadwal dari RTDB
 final scheduleExecutionStatusProvider = StreamProvider.autoDispose<Map<String, dynamic>?>((ref) {
   final db = FirebaseDatabase.instance;
-  const deviceId = 'greenhouse_node_001'; // TODO: ganti dengan activeDeviceIdProvider
+  // Gunakan deviceId dari selected greenhouse
+  final deviceId = ref.watch(dashboardDeviceIdProvider);
 
   return db
       .ref('devices/$deviceId/control/schedule')

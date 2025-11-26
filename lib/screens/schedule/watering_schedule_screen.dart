@@ -5,6 +5,7 @@ import 'watering_schedule_model.dart';
 import 'watering_schedule_repository.dart';
 import 'watering_schedule_controller.dart';
 import '../auth/auth_repository.dart';
+import '../auth/user_profile_repository.dart';
 
 class WateringScheduleScreen extends ConsumerWidget {
   const WateringScheduleScreen({super.key});
@@ -18,6 +19,10 @@ class WateringScheduleScreen extends ConsumerWidget {
       );
     }
 
+    // Cek role untuk permission
+    final profile = ref.watch(currentUserProfileProvider).valueOrNull;
+    final canManageSchedule = profile?.role.canManageSchedule ?? false;
+
     final schedulesAsync = ref.watch(wateringSchedulesProvider);
     final nextSchedule = ref.watch(nextScheduleProvider);
 
@@ -26,46 +31,79 @@ class WateringScheduleScreen extends ConsumerWidget {
         title: const Text('Jadwal Penyiraman'),
         backgroundColor: Colors.green,
       ),
-      body: schedulesAsync.when(
-        data: (schedules) {
-          if (schedules.isEmpty) {
-            return _buildEmptyState(context, ref, user.uid);
-          }
-          return Column(
-            children: [
-              if (nextSchedule != null) _buildNextScheduleCard(nextSchedule),
-              Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: schedules.length,
-                  itemBuilder: (context, index) {
-                    return _buildScheduleCard(
-                      context,
-                      ref,
-                      user.uid,
-                      schedules[index],
-                    );
-                  },
-                ),
+      body: Column(
+        children: [
+          // Info box untuk Owner (view only)
+          if (!canManageSchedule)
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withAlpha((255 * 0.1).round()),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.blue.withAlpha((255 * 0.3).round())),
               ),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error: $error'),
-        ),
+              child: Row(
+                children: [
+                  const Icon(Icons.visibility_outlined, color: Colors.blue),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Mode monitoring - Anda hanya dapat melihat jadwal penyiraman',
+                      style: TextStyle(color: Colors.blue[700]),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: schedulesAsync.when(
+              data: (schedules) {
+                if (schedules.isEmpty) {
+                  return _buildEmptyState(context, ref, user.uid, canManageSchedule);
+                }
+                return Column(
+                  children: [
+                    if (nextSchedule != null) _buildNextScheduleCard(nextSchedule),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: schedules.length,
+                        itemBuilder: (context, index) {
+                          return _buildScheduleCard(
+                            context,
+                            ref,
+                            user.uid,
+                            schedules[index],
+                            canManageSchedule,
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                );
+              },
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (error, stack) => Center(
+                child: Text('Error: $error'),
+              ),
+            ),
+          ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showScheduleDialog(context, ref, user.uid),
-        backgroundColor: Colors.green,
-        icon: const Icon(Icons.add),
-        label: const Text('Tambah Jadwal'),
-      ),
+      // FAB hanya untuk Admin & Petani
+      floatingActionButton: canManageSchedule
+          ? FloatingActionButton.extended(
+              onPressed: () => _showScheduleDialog(context, ref, user.uid),
+              backgroundColor: Colors.green,
+              icon: const Icon(Icons.add),
+              label: const Text('Tambah Jadwal'),
+            )
+          : null,
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, WidgetRef ref, String uid) {
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref, String uid, bool canManage) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -77,7 +115,8 @@ class WateringScheduleScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 18, color: Colors.grey),
           ),
           const SizedBox(height: 24),
-          ElevatedButton.icon(
+          if (canManage)
+            ElevatedButton.icon(
             onPressed: () => _showScheduleDialog(context, ref, uid),
             style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
             icon: const Icon(Icons.add),
@@ -140,6 +179,7 @@ class WateringScheduleScreen extends ConsumerWidget {
     WidgetRef ref,
     String uid,
     WateringSchedule schedule,
+    bool canManage,
   ) {
     final repository = ref.read(wateringScheduleRepositoryProvider);
 
@@ -166,46 +206,52 @@ class WateringScheduleScreen extends ConsumerWidget {
               Text('Threshold: ${schedule.moistureThreshold}%'),
           ],
         ),
-        trailing: PopupMenuButton<String>(
-          onSelected: (value) async {
-            if (value == 'edit') {
-              _showScheduleDialog(
-                context,
-                ref,
-                uid,
-                existingSchedule: schedule,
-              );
-            } else if (value == 'delete') {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Hapus Jadwal'),
-                  content: Text('Yakin ingin menghapus "${schedule.name}"?'),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, false),
-                      child: const Text('Batal'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(context, true),
-                      child: const Text('Hapus', style: TextStyle(color: Colors.red)),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await repository.deleteSchedule(uid, schedule.id);
+        // Hanya tampilkan menu edit/delete untuk Admin & Petani
+        trailing: canManage
+            ? PopupMenuButton<String>(
+                onSelected: (value) async {
+                  if (value == 'edit') {
+                    _showScheduleDialog(
+                      context,
+                      ref,
+                      uid,
+                      existingSchedule: schedule,
+                    );
+                  } else if (value == 'delete') {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Hapus Jadwal'),
+                        content: Text('Yakin ingin menghapus "${schedule.name}"?'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Batal'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm == true) {
+                      await repository.deleteSchedule(uid, schedule.id);
+                    }
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Edit')),
+                  const PopupMenuItem(value: 'delete', child: Text('Hapus')),
+                ],
+              )
+            : null,
+        // Toggle enable/disable hanya untuk Admin & Petani
+        onTap: canManage
+            ? () async {
+                await repository.toggleEnabled(uid, schedule.id, !schedule.enabled);
               }
-            }
-          },
-          itemBuilder: (context) => [
-            const PopupMenuItem(value: 'edit', child: Text('Edit')),
-            const PopupMenuItem(value: 'delete', child: Text('Hapus')),
-          ],
-        ),
-        onTap: () async {
-          await repository.toggleEnabled(uid, schedule.id, !schedule.enabled);
-        },
+            : null,
       ),
     );
   }

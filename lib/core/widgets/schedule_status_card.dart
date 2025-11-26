@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../screens/schedule/watering_schedule_repository.dart';
 import '../../services/schedule_executor_service.dart';
+import '../../screens/auth/user_profile_repository.dart';
 
 /// Widget kartu status jadwal dengan kontrol manual
 class ScheduleStatusCard extends ConsumerWidget {
@@ -15,7 +16,7 @@ class ScheduleStatusCard extends ConsumerWidget {
     final executorService = ref.watch(scheduleExecutorServiceProvider);
 
     if (nextSchedule == null) {
-      return _buildEmptyCard(context);
+      return _buildEmptyCard(context, ref);
     }
 
     final nextTime = nextSchedule.getNextScheduledTime();
@@ -184,7 +185,10 @@ class ScheduleStatusCard extends ConsumerWidget {
     );
   }
 
-  Widget _buildEmptyCard(BuildContext context) {
+  Widget _buildEmptyCard(BuildContext context, WidgetRef ref) {
+    final profile = ref.watch(currentUserProfileProvider).valueOrNull;
+    final canManageSchedule = profile?.role.canManageSchedule ?? false;
+    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -206,20 +210,23 @@ class ScheduleStatusCard extends ConsumerWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Buat jadwal untuk otomasi pompa',
+                    canManageSchedule 
+                        ? 'Buat jadwal untuk otomasi pompa'
+                        : 'Jadwal akan muncul setelah admin/petani membuatnya',
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
                   ),
                 ],
               ),
             ),
-            ElevatedButton.icon(
-              onPressed: () => context.pushNamed('schedule'),
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Buat'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
+            if (canManageSchedule)
+              ElevatedButton.icon(
+                onPressed: () => context.pushNamed('schedule'),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('Buat'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                ),
               ),
-            ),
           ],
         ),
       ),
