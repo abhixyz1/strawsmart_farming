@@ -1,1 +1,28 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"strawsmart-farming-af721","appId":"1:448830821403:android:695c4e71d00f15088d54be","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"strawsmart-farming-af721","configurations":{"android":"1:448830821403:android:695c4e71d00f15088d54be","ios":"1:448830821403:ios:9f88957f766324818d54be","macos":"1:448830821403:ios:9f88957f766324818d54be","web":"1:448830821403:web:2f76f1b291de554f8d54be","windows":"1:448830821403:web:053bb59f1cfa8b018d54be"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "strawsmart-farming-af721",
+          "appId": "1:448830821403:android:695c4e71d00f15088d54be",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "strawsmart-farming-af721",
+          "configurations": {
+            "android": "1:448830821403:android:695c4e71d00f15088d54be",
+            "ios": "1:448830821403:ios:9f88957f766324818d54be",
+            "macos": "1:448830821403:ios:9f88957f766324818d54be",
+            "web": "1:448830821403:web:2f76f1b291de554f8d54be",
+            "windows": "1:448830821403:web:053bb59f1cfa8b018d54be"
+          }
+        }
+      }
+    }
+  }
+}
