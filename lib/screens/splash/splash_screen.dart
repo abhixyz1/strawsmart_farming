@@ -47,40 +47,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: 0.15),
-                      border: Border.all(color: Colors.white.withValues(alpha: 0.3)),
-                    ),
-                    child: Hero(
-                      tag: 'logo',
-                      child: ClipOval(
-                        child: Image.asset(
-                          'assets/images/icon.png',
-                          width: 120,
-                          height: 120,
-                          fit: BoxFit.cover,
-                        ),
+                  Hero(
+                    tag: 'logo',
+                    child: ClipOval(
+                      child: Image.asset(
+                        'assets/images/icon.png',
+                        width: 120,
+                        height: 120,
+                        fit: BoxFit.cover,
                       ),
                     ),
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'StrawSmart Farming',
+                    'StrawSmart',
                     style: theme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Menghidupkan pertanian stroberi pintar dengan data real-time.',
-                    style: theme.bodyMedium?.copyWith(
-                      color: Colors.white.withValues(alpha: 0.8),
-                    ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
                   const SizedBox(
@@ -133,7 +117,7 @@ class _SplashBackground extends StatelessWidget {
           right: -50,
           child: _GlowBlob(
             size: 280,
-            color: const Color(0xFF5EFCE8).withValues(alpha: 0.45),
+            color: const Color(0xFF5EFCE8).withOpacity(0.45),
           ),
         ),
         Positioned(
@@ -141,7 +125,7 @@ class _SplashBackground extends StatelessWidget {
           left: -60,
           child: _GlowBlob(
             size: 320,
-            color: const Color(0xFF736EFE).withValues(alpha: 0.4),
+            color: const Color(0xFF736EFE).withOpacity(0.4),
           ),
         ),
       ],
@@ -165,10 +149,12 @@ class _GlowBlob extends StatelessWidget {
         gradient: RadialGradient(
           colors: [
             color,
-            color.withValues(alpha: 0.05),
+            color.withOpacity(0.05),
           ],
         ),
       ),
     );
   }
 }
+
+// ...existing code...
