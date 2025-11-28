@@ -8,6 +8,7 @@ import '../auth/user_profile_repository.dart';
 import '../greenhouse/greenhouse_repository.dart';
 import '../monitoring/monitoring_screen.dart';
 import '../profile/profile_screen.dart';
+import '../batch/batch_management_screen.dart';
 import '../logs/logs_screen.dart';
 import '../../core/widgets/app_shell.dart';
 import '../../core/widgets/schedule_status_card.dart';
@@ -38,6 +39,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       icon: Icon(Icons.show_chart_outlined),
       selectedIcon: Icon(Icons.show_chart),
       label: 'Monitoring',
+    ),
+    NavigationDestination(
+      icon: Icon(Icons.eco_outlined),
+      selectedIcon: Icon(Icons.eco),
+      label: 'Batch',
     ),
     NavigationDestination(
       icon: Icon(Icons.description_outlined),
@@ -95,8 +101,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     AsyncValue<PumpStatusData?> pumpAsync,
     AsyncValue<ControlMode> controlModeAsync,
   ) {
-    // Tab Pengaturan (index 3)
-    if (_selectedIndex == 3) {
+    // Tab Pengaturan (index 4)
+    if (_selectedIndex == 4) {
       return const ProfileScreen();
     }
 
@@ -105,8 +111,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return const MonitoringScreen();
     }
 
-    // Tab Laporan (index 2)
+    // Tab Batch (index 2)
     if (_selectedIndex == 2) {
+      return const BatchManagementScreen();
+    }
+
+    // Tab Laporan (index 3)
+    if (_selectedIndex == 3) {
       return const LaporanScreen();
     }
 
