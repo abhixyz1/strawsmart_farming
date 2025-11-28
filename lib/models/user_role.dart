@@ -62,6 +62,14 @@ enum UserRole {
   /// Admin & Petani: bisa CRUD jadwal, Owner: tidak bisa
   bool get canManageSchedule => this == UserRole.admin || this == UserRole.petani;
 
+  /// Cek apakah role bisa manage batch tanam (create, edit, delete)
+  /// Admin, Owner, Petani: semua bisa create & manage batch
+  bool get canManageBatch => true;
+
+  /// Cek apakah role bisa tambah journal entry ke batch
+  /// Admin, Petani: bisa, Owner: hanya lihat
+  bool get canAddJournal => this == UserRole.admin || this == UserRole.petani;
+
   /// Cek apakah role bisa akses Development Tools
   /// Hanya Admin
   bool get canAccessDevTools => this == UserRole.admin;
