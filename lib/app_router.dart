@@ -8,6 +8,9 @@ import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/splash/splash_screen.dart';
 import 'screens/schedule/watering_schedule_screen.dart';
 import 'screens/report/report_screen.dart';
+import 'screens/batch/batch_management_screen.dart';
+import 'screens/batch/batch_detail_screen.dart';
+import 'screens/batch/create_batch_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authStateProvider);
@@ -40,6 +43,29 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/report',
         name: 'report',
         builder: (context, state) => const ReportScreen(),
+      ),
+      GoRoute(
+        path: '/batch',
+        name: 'batch',
+        builder: (context, state) => const BatchManagementScreen(showAppBar: true),
+        routes: [
+          GoRoute(
+            path: 'create/:greenhouseId',
+            name: 'batch-create',
+            builder: (context, state) {
+              final greenhouseId = state.pathParameters['greenhouseId']!;
+              return CreateBatchScreen(greenhouseId: greenhouseId);
+            },
+          ),
+          GoRoute(
+            path: 'detail/:batchId',
+            name: 'batch-detail',
+            builder: (context, state) {
+              final batchId = state.pathParameters['batchId']!;
+              return BatchDetailScreen(batchId: batchId);
+            },
+          ),
+        ],
       ),
     ],
     redirect: (context, state) {
