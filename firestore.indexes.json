@@ -1,0 +1,31 @@
+{
+  "indexes": [
+    {
+      "collectionId": "cultivationBatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "greenhouseId", "order": "ASCENDING" },
+        { "fieldPath": "plantingDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "journal",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "greenhouseId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "batchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
