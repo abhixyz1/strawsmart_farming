@@ -129,7 +129,7 @@ class _CreateBatchScreenState extends ConsumerState<CreateBatchScreen> {
 
             // Variety
             DropdownButtonFormField<StrawberryVariety>(
-              value: _selectedVariety,
+              initialValue: _selectedVariety,
               isExpanded: true,
               menuMaxHeight: 300,
               decoration: const InputDecoration(

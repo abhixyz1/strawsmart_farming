@@ -411,11 +411,11 @@ class PhaseStats {
     // Calculate totals
     final totalAlerts = dailyStats.fold<int>(
       0,
-      (sum, s) => sum + s.alerts.length,
+      (runningTotal, stat) => runningTotal + stat.alerts.length,
     );
     final totalWateringMin = dailyStats.fold<int>(
       0,
-      (sum, s) => sum + (s.totalPumpDurationSec ~/ 60),
+      (runningTotal, stat) => runningTotal + (stat.totalPumpDurationSec ~/ 60),
     );
 
     return PhaseStats(

@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import '../../models/user_role.dart';
 import '../../core/utils/greenhouse_setup_helper.dart';
+import '../../core/utils/image_utils.dart';
+import '../../models/user_role.dart';
 import '../auth/auth_controller.dart';
 import '../auth/user_profile_repository.dart';
 import '../admin/user_management_screen.dart';
@@ -98,13 +99,41 @@ class _SettingsView extends ConsumerWidget {
   }
 }
 
-class _AccountHeader extends StatelessWidget {
+class _AccountHeader extends ConsumerWidget {
   const _AccountHeader({required this.profile});
 
   final UserProfile? profile;
 
+  Future<void> _pickAndUploadPhoto(BuildContext context, WidgetRef ref) async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 75,
+    );
+
+    if (image != null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Mengunggah foto...')),
+        );
+      }
+      
+      await ref.read(profileControllerProvider.notifier).updateProfilePhoto(image);
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto profil berhasil diperbarui')),
+        );
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final avatarBytes = ImageUtils.decodeBase64(profile?.photoBase64);
+    final hasPhoto = avatarBytes != null || (profile?.photoUrl?.isNotEmpty == true);
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -120,22 +149,51 @@ class _AccountHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Hero(
-            tag: 'avatar',
-            child: CircleAvatar(
-              radius: 40,
-              backgroundColor: Theme.of(context).colorScheme.surface,
-              backgroundImage: profile?.photoUrl?.isNotEmpty == true
-                  ? NetworkImage(profile!.photoUrl!)
-                  : null,
-              child: profile?.photoUrl?.isEmpty != false
-                  ? Icon(
-                      Icons.person,
-                      size: 40,
+          Stack(
+            children: [
+              Hero(
+                tag: 'avatar',
+                child: CircleAvatar(
+                  radius: 40,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  backgroundImage: avatarBytes != null
+                      ? MemoryImage(avatarBytes)
+                      : (profile?.photoUrl?.isNotEmpty == true
+                          ? NetworkImage(profile!.photoUrl!)
+                          : null),
+                  child: !hasPhoto
+                      ? Icon(
+                          Icons.person,
+                          size: 40,
+                          color: Theme.of(context).colorScheme.primary,
+                        )
+                      : null,
+                ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: InkWell(
+                  onTap: () => _pickAndUploadPhoto(context, ref),
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
                       color: Theme.of(context).colorScheme.primary,
-                    )
-                  : null,
-            ),
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.surface,
+                        width: 2,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.camera_alt,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(width: 20),
           Expanded(
@@ -460,6 +518,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   late final TextEditingController _phoneController;
   final _imagePicker = ImagePicker();
   File? _selectedImage;
+  Uint8List? _initialPhotoBytes;
 
   @override
   void initState() {
@@ -467,6 +526,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     _nameController = TextEditingController(text: widget.profile?.name ?? '');
     _emailController = TextEditingController(text: widget.profile?.email ?? '');
     _phoneController = TextEditingController(text: widget.profile?.phoneNumber ?? '');
+    _initialPhotoBytes = ImageUtils.decodeBase64(widget.profile?.photoBase64);
   }
 
   @override
@@ -525,6 +585,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     if (confirmed == true && widget.profile != null) {
       setState(() {
         _selectedImage = null;
+        _initialPhotoBytes = null;
       });
       
       await ref.read(profileControllerProvider.notifier).deleteProfilePhoto(widget.profile!);
@@ -544,6 +605,9 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
           ? null
           : _phoneController.text.trim(),
       photoUrl: widget.profile?.photoUrl,
+      photoBase64: widget.profile?.photoBase64,
+      role: widget.profile?.role ?? UserRole.petani,
+      currentGreenhouseId: widget.profile?.currentGreenhouseId,
       createdAt: widget.profile?.createdAt,
       updatedAt: widget.profile?.updatedAt,
     );
@@ -642,10 +706,12 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                                     radius: 60,
                                     backgroundImage: _selectedImage != null
                                         ? FileImage(_selectedImage!) as ImageProvider
-                                        : (widget.profile?.photoUrl != null
-                                            ? NetworkImage(widget.profile!.photoUrl!)
-                                            : null),
-                                    child: (_selectedImage == null && widget.profile?.photoUrl == null)
+                                        : (_initialPhotoBytes != null
+                                            ? MemoryImage(_initialPhotoBytes!)
+                                            : (widget.profile?.photoUrl != null
+                                                ? NetworkImage(widget.profile!.photoUrl!)
+                                                : null)),
+                                    child: (_selectedImage == null && _initialPhotoBytes == null && widget.profile?.photoUrl == null)
                                         ? Icon(
                                             Icons.person,
                                             size: 60,
@@ -682,7 +748,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
                                 'Tap ikon kamera untuk mengubah foto',
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
-                              if (widget.profile?.photoUrl != null || _selectedImage != null) ...[
+                              if (_initialPhotoBytes != null || widget.profile?.photoUrl != null || _selectedImage != null) ...[
                                 const SizedBox(height: 8),
                                 TextButton.icon(
                                   onPressed: controllerState.isLoading ? null : _removePhoto,
