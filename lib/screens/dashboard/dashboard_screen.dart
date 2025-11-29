@@ -174,39 +174,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               pumpAsync,
               controlModeAsync,
             ),
-          const SizedBox(height: 32),
-          Text(
-            'Grafik aktivitas',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 12),
-          AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Card(
-              clipBehavior: Clip.antiAlias,
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Theme.of(context).colorScheme.primaryContainer,
-                      Theme.of(context)
-                          .colorScheme
-                          .primaryContainer
-                          .withAlpha((255 * 0.45).round()),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                ),
-                child: const Center(
-                  child: Text(
-                    'Placeholder Chart\nIntegrasikan package chart pilihan Anda di sini.',
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
-          ),
         ],
       ),
     ),

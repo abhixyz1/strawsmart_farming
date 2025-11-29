@@ -130,6 +130,8 @@ class _CreateBatchScreenState extends ConsumerState<CreateBatchScreen> {
             // Variety
             DropdownButtonFormField<StrawberryVariety>(
               value: _selectedVariety,
+              isExpanded: true,
+              menuMaxHeight: 300,
               decoration: const InputDecoration(
                 labelText: 'Varietas Stroberi',
                 border: OutlineInputBorder(),
@@ -138,19 +140,21 @@ class _CreateBatchScreenState extends ConsumerState<CreateBatchScreen> {
               items: StrawberryVariety.values.map((variety) {
                 return DropdownMenuItem(
                   value: variety,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(variety.label),
-                      Text(
-                        variety.description,
-                        style: TextStyle(fontSize: 11, color: Colors.grey[600]),
-                      ),
-                    ],
+                  child: Text(
+                    '${variety.label} - ${variety.description}',
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
                   ),
                 );
               }).toList(),
+              selectedItemBuilder: (context) {
+                return StrawberryVariety.values.map((variety) {
+                  return Text(
+                    variety.label,
+                    overflow: TextOverflow.ellipsis,
+                  );
+                }).toList();
+              },
               onChanged: (value) {
                 setState(() => _selectedVariety = value!);
               },

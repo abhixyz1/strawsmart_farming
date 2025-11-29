@@ -5,6 +5,16 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.iOS: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.linux: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.macOS: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.windows: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.fuchsia: _SmoothSlidePageTransitionsBuilder(),
+        },
+      ),
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF6B9080), // Soft green
         brightness: Brightness.light,
@@ -65,6 +75,16 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.iOS: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.linux: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.macOS: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.windows: _SmoothSlidePageTransitionsBuilder(),
+          TargetPlatform.fuchsia: _SmoothSlidePageTransitionsBuilder(),
+        },
+      ),
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFF6B9080), // Soft green
         brightness: Brightness.dark,
@@ -152,6 +172,46 @@ class AppTheme {
       // Icon theme
       iconTheme: const IconThemeData(
         color: Color(0xFFE3E3E3),
+      ),
+    );
+  }
+}
+
+class _SmoothSlidePageTransitionsBuilder extends PageTransitionsBuilder {
+  const _SmoothSlidePageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    // Use a more pronounced curve for better visibility
+    const curve = Curves.easeOutQuart;
+    
+    final slideAnimation = Tween<Offset>(
+      begin: const Offset(1.0, 0.0), // Slide from right
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: animation,
+      curve: curve,
+    ));
+
+    final fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeIn,
+    ));
+
+    return SlideTransition(
+      position: slideAnimation,
+      child: FadeTransition(
+        opacity: fadeAnimation,
+        child: child,
       ),
     );
   }
