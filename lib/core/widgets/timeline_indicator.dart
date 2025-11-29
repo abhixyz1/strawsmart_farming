@@ -50,7 +50,7 @@ class VerticalTimelineIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final defaultColor = lineColor ??
-        Theme.of(context).colorScheme.outlineVariant.withOpacity(0.6);
+  Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.6);
     final resolvedBefore = beforeLineColor ?? defaultColor;
     final resolvedAfter = afterLineColor ?? defaultColor;
 
