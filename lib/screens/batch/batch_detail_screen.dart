@@ -1,12 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 
+import '../../core/utils/image_utils.dart';
 import '../../core/widgets/timeline_indicator.dart';
-import '../../models/cultivation_batch.dart';
 import '../../models/batch_daily_stats.dart';
+import '../../models/cultivation_batch.dart';
 import '../../services/photo_upload_service.dart';
 import 'batch_repository.dart';
 import 'daily_stats_repository.dart';
@@ -112,316 +115,275 @@ class _BatchDetailScreenState extends ConsumerState<BatchDetailScreen>
     );
   }
 
-  void _showAddJournalDialog(CultivationBatch batch) {
+  Future<void> _showAddJournalDialog(CultivationBatch batch) async {
+    final formKey = GlobalKey<FormState>();
     final titleController = TextEditingController();
     final descController = TextEditingController();
-    JournalEntryType selectedType = JournalEntryType.note;
-    double? harvestKg;
-    List<XFile> selectedPhotos = [];
-    bool isUploading = false;
+    final harvestController = TextEditingController();
 
-    showModalBottomSheet(
+    JournalEntryType selectedType = JournalEntryType.note;
+    DateTime selectedDate = DateTime.now();
+    XFile? selectedPhoto;
+    bool isSaving = false;
+
+    await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-            left: 16,
-            right: 16,
-            top: 16,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Tambah Jurnal',
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<JournalEntryType>(
-                  value: selectedType,
-                  decoration: const InputDecoration(
-                    labelText: 'Tipe Jurnal',
-                    border: OutlineInputBorder(),
-                  ),
-                  items: JournalEntryType.values.map((type) {
-                    return DropdownMenuItem(
-                      value: type,
-                      child: Row(
-                        children: [
-                          Text(type.emoji),
-                          const SizedBox(width: 8),
-                          Text(type.label),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (value) {
-                    setModalState(() => selectedType = value!);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: titleController,
-                  decoration: const InputDecoration(
-                    labelText: 'Judul',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: descController,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Deskripsi',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                if (selectedType == JournalEntryType.harvest) ...[
-                  const SizedBox(height: 12),
-                  TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Hasil Panen (kg)',
-                      border: OutlineInputBorder(),
-                    ),
-                    onChanged: (v) => harvestKg = double.tryParse(v),
-                  ),
-                ],
-                const SizedBox(height: 16),
-                // Photo Section
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
+                left: 20,
+                right: 20,
+                top: 24,
+              ),
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Icon(Icons.photo_camera, color: Colors.grey[600]),
-                          const SizedBox(width: 8),
                           Text(
-                            'Foto Progress (Opsional)',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey[700],
-                            ),
+                            'Tambah Jurnal',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(sheetContext).pop(),
+                            icon: const Icon(Icons.close),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
-                      // Photo preview
-                      if (selectedPhotos.isNotEmpty) ...[
-                        SizedBox(
-                          height: 80,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: selectedPhotos.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.only(right: 8),
-                                child: Stack(
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<JournalEntryType>(
+                        initialValue: selectedType,
+                        decoration: const InputDecoration(
+                          labelText: 'Tipe Aktivitas',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: JournalEntryType.values.map((type) {
+                          return DropdownMenuItem(
+                            value: type,
+                            child: Row(
+                              children: [
+                                Text(type.emoji),
+                                const SizedBox(width: 8),
+                                Text(type.label),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          if (value != null) {
+                            setModalState(() => selectedType = value);
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      InkWell(
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: sheetContext,
+                            initialDate: selectedDate,
+                            firstDate: batch.plantingDate,
+                            lastDate: DateTime.now(),
+                          );
+                          if (picked != null) {
+                            setModalState(() => selectedDate = picked);
+                          }
+                        },
+                        child: InputDecorator(
+                          decoration: const InputDecoration(
+                            labelText: 'Tanggal Aktivitas',
+                            border: OutlineInputBorder(),
+                            prefixIcon: Icon(Icons.calendar_today),
+                          ),
+                          child: Text(
+                            DateFormat('dd MMM yyyy', 'id_ID').format(selectedDate),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: titleController,
+                        decoration: const InputDecoration(
+                          labelText: 'Judul',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Judul wajib diisi';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: descController,
+                        maxLines: 3,
+                        decoration: const InputDecoration(
+                          labelText: 'Deskripsi',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (selectedType == JournalEntryType.harvest) ...[
+                        TextFormField(
+                          controller: harvestController,
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            labelText: 'Hasil Panen (kg)',
+                            border: OutlineInputBorder(),
+                            suffixText: 'kg',
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Jumlah panen wajib diisi';
+                            }
+                            if (double.tryParse(value) == null) {
+                              return 'Masukkan angka yang valid';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      InkWell(
+                        onTap: () async {
+                          final image = await ImagePicker().pickImage(
+                            source: ImageSource.gallery,
+                            maxWidth: 1024,
+                            maxHeight: 1024,
+                            imageQuality: 75,
+                          );
+                          if (image != null) {
+                            setModalState(() => selectedPhoto = image);
+                          }
+                        },
+                        child: Container(
+                          height: 150,
+                          decoration: BoxDecoration(
+                            border: Border.all(color: Colors.grey.shade300),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: selectedPhoto == null
+                              ? Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: const [
+                                    Icon(Icons.add_a_photo, size: 36, color: Colors.grey),
+                                    SizedBox(height: 8),
+                                    Text('Tambah Foto (opsional)'),
+                                  ],
+                                )
+                              : Stack(
+                                  fit: StackFit.expand,
                                   children: [
                                     ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: FutureBuilder<dynamic>(
-                                        future: selectedPhotos[index].readAsBytes(),
-                                        builder: (context, snapshot) {
-                                          if (!snapshot.hasData) {
-                                            return Container(
-                                              width: 80,
-                                              height: 80,
-                                              color: Colors.grey[200],
-                                              child: const Center(
-                                                child: CircularProgressIndicator(strokeWidth: 2),
-                                              ),
-                                            );
-                                          }
-                                          return Image.memory(
-                                            snapshot.data!,
-                                            width: 80,
-                                            height: 80,
-                                            fit: BoxFit.cover,
-                                          );
-                                        },
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: Image.file(
+                                        File(selectedPhoto!.path),
+                                        fit: BoxFit.cover,
                                       ),
                                     ),
                                     Positioned(
-                                      top: 2,
-                                      right: 2,
-                                      child: GestureDetector(
-                                        onTap: () {
-                                          setModalState(() {
-                                            selectedPhotos.removeAt(index);
-                                          });
-                                        },
-                                        child: Container(
-                                          padding: const EdgeInsets.all(2),
-                                          decoration: const BoxDecoration(
-                                            color: Colors.red,
-                                            shape: BoxShape.circle,
-                                          ),
-                                          child: const Icon(
-                                            Icons.close,
-                                            size: 14,
-                                            color: Colors.white,
-                                          ),
+                                      top: 8,
+                                      right: 8,
+                                      child: CircleAvatar(
+                                        backgroundColor: Colors.black54,
+                                        child: IconButton(
+                                          icon: const Icon(Icons.close, color: Colors.white),
+                                          onPressed: () => setModalState(() => selectedPhoto = null),
                                         ),
                                       ),
                                     ),
                                   ],
                                 ),
-                              );
-                            },
-                          ),
                         ),
-                        const SizedBox(height: 8),
-                      ],
-                      // Photo buttons
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.photo_library, size: 18),
-                              label: const Text('Galeri'),
-                              onPressed: selectedPhotos.length >= 5
-                                  ? null
-                                  : () async {
-                                      final photoService = ref.read(photoUploadServiceProvider);
-                                      final images = await photoService.pickMultipleImages(
-                                        maxImages: 5 - selectedPhotos.length,
-                                      );
-                                      if (images.isNotEmpty) {
-                                        setModalState(() {
-                                          selectedPhotos.addAll(images);
-                                        });
-                                      }
-                                    },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              icon: const Icon(Icons.camera_alt, size: 18),
-                              label: const Text('Kamera'),
-                              onPressed: selectedPhotos.length >= 5
-                                  ? null
-                                  : () async {
-                                      final photoService = ref.read(photoUploadServiceProvider);
-                                      final image = await photoService.pickImage(
-                                        source: ImageSource.camera,
-                                      );
-                                      if (image != null) {
-                                        setModalState(() {
-                                          selectedPhotos.add(image);
-                                        });
-                                      }
-                                    },
-                            ),
-                          ),
-                        ],
                       ),
-                      if (selectedPhotos.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            '${selectedPhotos.length}/5 foto dipilih',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ),
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                if (!formKey.currentState!.validate()) return;
+                                setModalState(() => isSaving = true);
+
+                                try {
+                                  String? photoData;
+                                  if (selectedPhoto != null) {
+                                    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+                                    photoData = await ref
+                                        .read(photoUploadServiceProvider)
+                                        .uploadJournalPhoto(
+                                          batchId: batch.id,
+                                          entryId: tempId,
+                                          image: selectedPhoto!,
+                                        );
+                                  }
+
+                                  final entry = BatchJournalEntry(
+                                    id: '',
+                                    batchId: batch.id,
+                                    date: selectedDate,
+                                    type: selectedType,
+                                    title: titleController.text.trim(),
+                                    description: descController.text.trim().isEmpty
+                                        ? null
+                                        : descController.text.trim(),
+                                    harvestKg: selectedType == JournalEntryType.harvest
+                                        ? double.tryParse(harvestController.text)
+                                        : null,
+                                    photoUrls: photoData != null ? [photoData] : [],
+                                  );
+
+                                  await ref.read(batchRepositoryProvider).addJournalEntry(entry);
+
+                                  if (sheetContext.mounted && Navigator.canPop(sheetContext)) {
+                                    Navigator.of(sheetContext).pop();
+                                  }
+
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(this.context).showSnackBar(
+                                    const SnackBar(content: Text('Jurnal berhasil ditambahkan')),
+                                  );
+                                } catch (e) {
+                                  if (!mounted) return;
+                                  ScaffoldMessenger.of(this.context).showSnackBar(
+                                    SnackBar(content: Text('Gagal menambahkan jurnal: $e')),
+                                  );
+                                } finally {
+                                  if (context.mounted) {
+                                    setModalState(() => isSaving = false);
+                                  }
+                                }
+                              },
+                        icon: isSaving
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.save),
+                        label: const Text('Simpan'),
+                      ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: isUploading
-                      ? null
-                      : () async {
-                          setModalState(() => isUploading = true);
-                          
-                          try {
-                            // Create journal entry first to get ID
-                            final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-                            List<String> photoUrls = [];
-                            
-                            // Upload photos if any
-                            if (selectedPhotos.isNotEmpty) {
-                              final photoService = ref.read(photoUploadServiceProvider);
-                              photoUrls = await photoService.uploadMultiplePhotos(
-                                batchId: batch.id,
-                                journalId: tempId,
-                                imageFiles: selectedPhotos,
-                              );
-                            }
-                            
-                            final entry = BatchJournalEntry(
-                              id: '',
-                              batchId: batch.id,
-                              date: DateTime.now(),
-                              type: selectedType,
-                              title: titleController.text.isEmpty
-                                  ? null
-                                  : titleController.text,
-                              description: descController.text.isEmpty
-                                  ? null
-                                  : descController.text,
-                              photoUrls: photoUrls,
-                              harvestKg: harvestKg,
-                            );
-                            
-                            await ref
-                                .read(batchRepositoryProvider)
-                                .addJournalEntry(entry);
-                            
-                            if (mounted) Navigator.pop(context);
-                          } catch (e) {
-                            setModalState(() => isUploading = false);
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Error: $e')),
-                              );
-                            }
-                          }
-                        },
-                  child: isUploading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(selectedPhotos.isNotEmpty
-                          ? 'Simpan dengan ${selectedPhotos.length} Foto'
-                          : 'Simpan'),
-                ),
-                const SizedBox(height: 16),
-              ],
-            ),
-          ),
-        ),
-      ),
+              ),
+            );
+          },
+        );
+      },
     );
+
+    titleController.dispose();
+    descController.dispose();
+    harvestController.dispose();
   }
 
   SliverAppBar _buildSliverAppBar(BuildContext context, CultivationBatch batch) {
@@ -660,7 +622,7 @@ class _BatchDetailScreenState extends ConsumerState<BatchDetailScreen>
   void _showCompleteDialog(CultivationBatch batch) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Selesaikan Batch?'),
         content: const Text(
           'Batch akan ditandai selesai dan tidak bisa diubah lagi. '
@@ -668,25 +630,23 @@ class _BatchDetailScreenState extends ConsumerState<BatchDetailScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Batal'),
           ),
           FilledButton(
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref.read(batchRepositoryProvider).completeBatch(batch.id);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Batch berhasil diselesaikan')),
-                  );
-                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Batch berhasil diselesaikan')),
+                );
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e')),
+                );
               }
             },
             child: const Text('Selesaikan'),
@@ -699,7 +659,7 @@ class _BatchDetailScreenState extends ConsumerState<BatchDetailScreen>
   void _showDeleteDialog(CultivationBatch batch) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Hapus Batch?'),
         content: Text(
           'Batch "${batch.name}" akan dihapus permanen beserta semua data jurnal. '
@@ -707,27 +667,25 @@ class _BatchDetailScreenState extends ConsumerState<BatchDetailScreen>
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Batal'),
           ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              Navigator.pop(context);
+              Navigator.pop(dialogContext);
               try {
                 await ref.read(batchRepositoryProvider).deleteBatch(batch.id);
-                if (mounted) {
-                  Navigator.pop(context); // Back to list
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Batch berhasil dihapus')),
-                  );
-                }
+                if (!mounted) return;
+                Navigator.pop(context); // Back to list
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Batch berhasil dihapus')),
+                );
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
-                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Error: $e')),
+                );
               }
             },
             child: const Text('Hapus'),
@@ -1118,6 +1076,16 @@ void _showPhotoViewer(BuildContext context, List<String> photoUrls, int initialI
   );
 }
 
+ImageProvider? _resolvePhotoProvider(String source) {
+  if (ImageUtils.isRemoteSource(source)) {
+    return NetworkImage(source);
+  }
+
+  final bytes = ImageUtils.decodeBase64(source);
+  if (bytes == null) return null;
+  return MemoryImage(bytes);
+}
+
 /// Card untuk jurnal entry
 class _JournalEntryCard extends StatelessWidget {
   const _JournalEntryCard({required this.entry});
@@ -1222,6 +1190,8 @@ class _JournalEntryCard extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   itemCount: entry.photoUrls.length,
                   itemBuilder: (context, index) {
+                    final photoSource = entry.photoUrls[index];
+                    final imageProvider = _resolvePhotoProvider(photoSource);
                     return GestureDetector(
                       onTap: () => _showPhotoViewer(context, entry.photoUrls, index),
                       child: Container(
@@ -1230,12 +1200,17 @@ class _JournalEntryCard extends StatelessWidget {
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
-                          image: DecorationImage(
-                            image: NetworkImage(entry.photoUrls[index]),
-                            fit: BoxFit.cover,
-                          ),
+                          color: Colors.grey.shade200,
+                          image: imageProvider != null
+                              ? DecorationImage(
+                                  image: imageProvider,
+                                  fit: BoxFit.cover,
+                                )
+                              : null,
                         ),
-                        child: entry.photoUrls.length > 1 && index == 0
+                        child: imageProvider == null
+                            ? const Icon(Icons.image_not_supported, color: Colors.grey)
+                            : entry.photoUrls.length > 1 && index == 0
                             ? Align(
                                 alignment: Alignment.bottomRight,
                                 child: Container(
@@ -1256,7 +1231,7 @@ class _JournalEntryCard extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                              )
+                                  )
                             : null,
                       ),
                     );
@@ -1720,7 +1695,7 @@ class _TimelineTab extends ConsumerWidget {
                             afterLineColor: Colors.grey[300],
                             indicator: Container(
                               decoration: BoxDecoration(
-                                color: item.color.withOpacity(0.2),
+                                color: item.color.withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
                                 border: Border.all(color: item.color, width: 2),
                               ),
@@ -1823,7 +1798,7 @@ class _TimelineCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: item.color.withOpacity(0.1),
+                  color: item.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -2026,41 +2001,32 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
           setState(() => _currentIndex = index);
         },
         itemBuilder: (context, index) {
+          final photoSource = widget.photoUrls[index];
           return InteractiveViewer(
             minScale: 0.5,
             maxScale: 4.0,
             child: Center(
-              child: Image.network(
-                widget.photoUrls[index],
-                fit: BoxFit.contain,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                      color: Colors.white,
-                    ),
-                  );
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.error, color: Colors.white, size: 48),
-                        SizedBox(height: 8),
-                        Text(
-                          'Gagal memuat foto',
-                          style: TextStyle(color: Colors.white),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+              child: ImageUtils.isRemoteSource(photoSource)
+                  ? Image.network(
+                      photoSource,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Center(
+                          child: CircularProgressIndicator(
+                            value: loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
+                            color: Colors.white,
+                          ),
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return const _PhotoErrorPlaceholder();
+                      },
+                    )
+                  : _buildMemoryPhoto(photoSource),
             ),
           );
         },
@@ -2089,6 +2055,40 @@ class _PhotoViewerScreenState extends State<_PhotoViewerScreen> {
               ),
             )
           : null,
+    );
+  }
+
+  Widget _buildMemoryPhoto(String source) {
+    final bytes = ImageUtils.decodeBase64(source);
+    if (bytes == null) {
+      return const _PhotoErrorPlaceholder();
+    }
+
+    return Image.memory(
+      bytes,
+      fit: BoxFit.contain,
+      errorBuilder: (context, error, stackTrace) => const _PhotoErrorPlaceholder(),
+    );
+  }
+}
+
+class _PhotoErrorPlaceholder extends StatelessWidget {
+  const _PhotoErrorPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.error, color: Colors.white, size: 48),
+          SizedBox(height: 8),
+          Text(
+            'Gagal memuat foto',
+            style: TextStyle(color: Colors.white),
+          ),
+        ],
+      ),
     );
   }
 }

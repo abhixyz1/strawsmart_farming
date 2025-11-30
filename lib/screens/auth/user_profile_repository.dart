@@ -13,6 +13,7 @@ class UserProfile {
     required this.email,
     this.phoneNumber,
     this.photoUrl,
+    this.photoBase64,
     this.role = UserRole.petani,
     this.currentGreenhouseId,
     this.createdAt,
@@ -24,6 +25,7 @@ class UserProfile {
   final String email;
   final String? phoneNumber;
   final String? photoUrl;
+  final String? photoBase64;
   
   /// Role global user (admin/owner/petani)
   final UserRole role;
@@ -47,6 +49,7 @@ class UserProfile {
       email: data['email'] as String? ?? '',
       phoneNumber: data['phoneNumber'] as String?,
       photoUrl: data['photoUrl'] as String?,
+  photoBase64: data['photoBase64'] as String?,
       role: UserRole.fromString(data['role'] as String?),
       currentGreenhouseId: data['currentGreenhouseId'] as String?,
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
@@ -60,6 +63,7 @@ class UserProfile {
       'email': email,
       'phoneNumber': phoneNumber,
       'photoUrl': photoUrl,
+  'photoBase64': photoBase64,
       'role': role.name,
       'currentGreenhouseId': currentGreenhouseId,
       'updatedAt': FieldValue.serverTimestamp(),
@@ -71,16 +75,19 @@ class UserProfile {
     String? email,
     String? phoneNumber,
     String? photoUrl,
+    String? photoBase64,
     UserRole? role,
     String? currentGreenhouseId,
     bool clearCurrentGreenhouse = false,
+    bool clearPhoto = false,
   }) {
     return UserProfile(
       id: id,
       name: name ?? this.name,
       email: email ?? this.email,
       phoneNumber: phoneNumber ?? this.phoneNumber,
-      photoUrl: photoUrl ?? this.photoUrl,
+      photoUrl: clearPhoto ? null : (photoUrl ?? this.photoUrl),
+      photoBase64: clearPhoto ? null : (photoBase64 ?? this.photoBase64),
       role: role ?? this.role,
       currentGreenhouseId: clearCurrentGreenhouse ? null : (currentGreenhouseId ?? this.currentGreenhouseId),
       createdAt: createdAt,
@@ -101,6 +108,15 @@ class UserProfileRepository {
       if (data == null) return null;
       return UserProfile.fromMap(snapshot.id, data);
     });
+  }
+
+  Future<UserProfile?> getUserProfile(String uid) async {
+    final snapshot = await _firestore.collection('users').doc(uid).get();
+    final data = snapshot.data();
+    if (!snapshot.exists || data == null) {
+      return null;
+    }
+    return UserProfile.fromMap(snapshot.id, data);
   }
 
   Future<void> updateProfile(String uid, UserProfile profile) async {

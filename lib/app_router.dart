@@ -11,6 +11,7 @@ import 'screens/report/report_screen.dart';
 import 'screens/batch/batch_management_screen.dart';
 import 'screens/batch/batch_detail_screen.dart';
 import 'screens/batch/create_batch_screen.dart';
+import 'core/utils/page_transitions.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authStateProvider);
@@ -22,47 +23,71 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/splash',
         name: 'splash',
-        builder: (context, state) => const SplashScreen(),
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const SplashScreen(),
+        ),
       ),
       GoRoute(
         path: '/login',
         name: 'login',
-        builder: (context, state) => const LoginScreen(),
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const LoginScreen(),
+        ),
       ),
       GoRoute(
         path: '/dashboard',
         name: 'dashboard',
-        builder: (context, state) => const DashboardScreen(),
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const DashboardScreen(),
+        ),
       ),
       GoRoute(
         path: '/schedule',
         name: 'schedule',
-        builder: (context, state) => const WateringScheduleScreen(),
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const WateringScheduleScreen(),
+        ),
       ),
       GoRoute(
         path: '/report',
         name: 'report',
-        builder: (context, state) => const ReportScreen(),
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const ReportScreen(),
+        ),
       ),
       GoRoute(
         path: '/batch',
         name: 'batch',
-        builder: (context, state) => const BatchManagementScreen(showAppBar: true),
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const BatchManagementScreen(showAppBar: true),
+        ),
         routes: [
           GoRoute(
             path: 'create/:greenhouseId',
             name: 'batch-create',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final greenhouseId = state.pathParameters['greenhouseId']!;
-              return CreateBatchScreen(greenhouseId: greenhouseId);
+              return buildSlideTransitionPage(
+                state: state,
+                child: CreateBatchScreen(greenhouseId: greenhouseId),
+              );
             },
           ),
           GoRoute(
             path: 'detail/:batchId',
             name: 'batch-detail',
-            builder: (context, state) {
+            pageBuilder: (context, state) {
               final batchId = state.pathParameters['batchId']!;
-              return BatchDetailScreen(batchId: batchId);
+              return buildSlideTransitionPage(
+                state: state,
+                child: BatchDetailScreen(batchId: batchId),
+              );
             },
           ),
         ],
@@ -78,8 +103,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return '/login';
       }
 
-      if (isLoggedIn && (loggingIn || onSplash)) {
+      if (isLoggedIn && onSplash) {
         return '/dashboard';
+      }
+
+      // When already logged in and currently on /login, allow staying so
+      // the screen can drive its own transition after animations.
+      if (isLoggedIn && loggingIn) {
+        return null;
       }
 
       return null;

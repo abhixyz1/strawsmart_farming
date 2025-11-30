@@ -117,7 +117,7 @@ class _SplashBackground extends StatelessWidget {
           right: -50,
           child: _GlowBlob(
             size: 280,
-            color: const Color(0xFF5EFCE8).withOpacity(0.45),
+            color: const Color(0xFF5EFCE8).withValues(alpha: 0.45),
           ),
         ),
         Positioned(
@@ -125,7 +125,7 @@ class _SplashBackground extends StatelessWidget {
           left: -60,
           child: _GlowBlob(
             size: 320,
-            color: const Color(0xFF736EFE).withOpacity(0.4),
+            color: const Color(0xFF736EFE).withValues(alpha: 0.4),
           ),
         ),
       ],
@@ -149,7 +149,7 @@ class _GlowBlob extends StatelessWidget {
         gradient: RadialGradient(
           colors: [
             color,
-            color.withOpacity(0.05),
+            color.withValues(alpha: 0.05),
           ],
         ),
       ),

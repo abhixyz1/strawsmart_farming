@@ -1,25 +1,20 @@
+import 'dart:convert';
 
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
-import 'package:uuid/uuid.dart';
 
 /// Provider untuk PhotoUploadService
 final photoUploadServiceProvider = Provider<PhotoUploadService>((ref) {
-  return PhotoUploadService(FirebaseStorage.instance);
+  return PhotoUploadService();
 });
 
-/// Service untuk upload foto ke Firebase Storage
+/// Service utilitas untuk memproses foto menjadi Base64
 class PhotoUploadService {
-  PhotoUploadService(this._storage);
-
-  final FirebaseStorage _storage;
+  PhotoUploadService();
   final _picker = ImagePicker();
-  final _uuid = const Uuid();
-  static const _maxUploadBytes = 5 * 1024 * 1024; // 5 MB
-
+  static const _maxUploadBytes = 600 * 1024; // ~600 KB agar aman di Firestore
   /// Pilih foto dari galeri atau kamera
   Future<XFile?> pickImage({required ImageSource source}) async {
     try {
@@ -35,108 +30,33 @@ class PhotoUploadService {
     }
   }
 
-  /// Pilih multiple foto dari galeri
-  Future<List<XFile>> pickMultipleImages({int maxImages = 5}) async {
+  /// Konversi foto profil menjadi string Base64 siap simpan di Firestore
+  Future<String> uploadProfilePhoto({
+    required String uid,
+    required XFile image,
+  }) async {
     try {
-      final images = await _picker.pickMultiImage(
-        maxWidth: 1200,
-        maxHeight: 1200,
-        imageQuality: 85,
-      );
-      // Limit jumlah foto
-      return images.take(maxImages).toList();
+      final preparedBytes = await _prepareBytes(image);
+      return base64Encode(preparedBytes);
     } catch (e) {
-      return [];
+      throw Exception('Gagal memproses foto profil: $e');
     }
   }
 
-  /// Upload foto jurnal ke Firebase Storage
-  /// Returns download URL
-  Future<String?> uploadJournalPhoto({
+  /// Konversi foto jurnal batch menjadi string Base64
+  Future<String> uploadJournalPhoto({
     required String batchId,
-    required String journalId,
-    required XFile imageFile,
+    required String entryId,
+    required XFile image,
   }) async {
     try {
-      final fileName = '${_uuid.v4()}.jpg';
-      final ref = _storage.ref()
-          .child('batches')
-          .child(batchId)
-          .child('journal')
-          .child(journalId)
-          .child(fileName);
-      final preparedBytes = await _prepareBytes(imageFile);
-
-      final snapshot = await ref.putData(
-        preparedBytes,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-      
-      // Get download URL
-      final downloadUrl = await snapshot.ref.getDownloadURL();
-      return downloadUrl;
-    } catch (e, st) {
-      debugPrint('Error uploading photo: $e\n$st');
-      return null;
+      final preparedBytes = await _prepareBytes(image);
+      return base64Encode(preparedBytes);
+    } catch (e) {
+      throw Exception('Gagal memproses foto jurnal: $e');
     }
   }
 
-  /// Upload multiple foto sekaligus
-  Future<List<String>> uploadMultiplePhotos({
-    required String batchId,
-    required String journalId,
-    required List<XFile> imageFiles,
-    void Function(int uploaded, int total)? onProgress,
-  }) async {
-    final urls = <String>[];
-    
-    for (var i = 0; i < imageFiles.length; i++) {
-      final url = await uploadJournalPhoto(
-        batchId: batchId,
-        journalId: journalId,
-        imageFile: imageFiles[i],
-      );
-      
-      if (url != null) {
-        urls.add(url);
-      }
-      
-      onProgress?.call(i + 1, imageFiles.length);
-    }
-    
-    return urls;
-  }
-
-  /// Delete foto dari storage
-  Future<void> deletePhoto(String photoUrl) async {
-    try {
-      final ref = _storage.refFromURL(photoUrl);
-      await ref.delete();
-    } catch (e, st) {
-      debugPrint('Error deleting photo: $e\n$st');
-    }
-  }
-
-  /// Delete semua foto jurnal
-  Future<void> deleteJournalPhotos({
-    required String batchId,
-    required String journalId,
-  }) async {
-    try {
-      final ref = _storage.ref()
-          .child('batches')
-          .child(batchId)
-          .child('journal')
-          .child(journalId);
-      
-      final items = await ref.listAll();
-      for (final item in items.items) {
-        await item.delete();
-      }
-    } catch (e, st) {
-      debugPrint('Error deleting journal photos: $e\n$st');
-    }
-  }
 
   Future<Uint8List> _prepareBytes(XFile file) async {
     final rawBytes = await file.readAsBytes();
