@@ -60,7 +60,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
                   ),
                   const SizedBox(height: 18),
                   Text(
-                    'StrawSmart',
+                    'StrawSmart Farming',
                     style: theme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,

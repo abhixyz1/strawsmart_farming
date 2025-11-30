@@ -34,6 +34,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.initState();
     // Preload background image untuk performa
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       precacheImage(
         const AssetImage('assets/images/homestrawberry.jpg'),
         context,
@@ -234,35 +235,31 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required double cardPadding,
     required double spacing,
   }) {
+    // Ubah layout landscape agar header dan form login satu kolom di tengah
     return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: LoginConstants.maxLayoutWidth,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Row(
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: LoginConstants.maxCardWidth,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Left side - Header
-              Expanded(
-                child: Center(
-                  child: const LoginHeader(),
-                ),
-              ),
-              const SizedBox(width: 32),
-              // Right side - Form
-              Expanded(
-                child: GlassCard(
-                  child: SingleChildScrollView(
-                    padding: EdgeInsets.all(cardPadding),
-                    child: _buildFormContent(
-                      loading: loading,
-                      errMsg: errMsg,
-                      theme: theme,
-                      colorScheme: colorScheme,
-                      spacing: spacing,
-                      screenHeight: 900, // Medium size for landscape
-                    ),
+              const LoginHeader(),
+              SizedBox(height: spacing),
+              GlassCard(
+                child: Padding(
+                  padding: EdgeInsets.all(cardPadding),
+                  child: _buildFormContent(
+                    loading: loading,
+                    errMsg: errMsg,
+                    theme: theme,
+                    colorScheme: colorScheme,
+                    spacing: spacing,
+                    screenHeight: 900, // Medium size for landscape
                   ),
                 ),
               ),
