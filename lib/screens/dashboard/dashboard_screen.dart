@@ -166,7 +166,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 32),
             _SectionHeader(
               title: 'Kontrol lingkungan',
-              subtitle: 'Pantau pompa nutrisi & insight budidaya StrawSmart.',
+              subtitle: 'Pantau pompa air & insight budidaya StrawSmart.',
             ),
             const SizedBox(height: 16),
             _buildPumpCard(
@@ -900,7 +900,7 @@ class _PumpStatusCard extends ConsumerWidget {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'Pompa nutrisi',
+                  'Pompa air',
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
