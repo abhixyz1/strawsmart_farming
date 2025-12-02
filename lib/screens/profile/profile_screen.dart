@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 import '../../core/utils/greenhouse_setup_helper.dart';
 import '../../core/utils/image_utils.dart';
 import '../../models/user_role.dart';
@@ -104,30 +105,29 @@ class _AccountHeader extends ConsumerWidget {
 
   final UserProfile? profile;
 
-  Future<void> _pickAndUploadPhoto(BuildContext context, WidgetRef ref) async {
-    final picker = ImagePicker();
-    final image = await picker.pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 75,
-    );
+  void _showPhotoPreview(BuildContext context, Uint8List? avatarBytes) {
+    final hasPhoto = avatarBytes != null || (profile?.photoUrl?.isNotEmpty == true);
+    if (!hasPhoto) return;
 
-    if (image != null) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Mengunggah foto...')),
-        );
-      }
-      
-      await ref.read(profileControllerProvider.notifier).updateProfilePhoto(image);
-      
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Foto profil berhasil diperbarui')),
-        );
-      }
-    }
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: false,
+        barrierColor: Colors.black87,
+        barrierDismissible: true,
+        pageBuilder: (context, animation, secondaryAnimation) {
+          return _FullScreenPhotoViewer(
+            avatarBytes: avatarBytes,
+            photoUrl: profile?.photoUrl,
+          );
+        },
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(
+            opacity: animation,
+            child: child,
+          );
+        },
+      ),
+    );
   }
 
   @override
@@ -149,51 +149,27 @@ class _AccountHeader extends ConsumerWidget {
       ),
       child: Row(
         children: [
-          Stack(
-            children: [
-              Hero(
-                tag: 'avatar',
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Theme.of(context).colorScheme.surface,
-                  backgroundImage: avatarBytes != null
-                      ? MemoryImage(avatarBytes)
-                      : (profile?.photoUrl?.isNotEmpty == true
-                          ? NetworkImage(profile!.photoUrl!)
-                          : null),
-                  child: !hasPhoto
-                      ? Icon(
-                          Icons.person,
-                          size: 40,
-                          color: Theme.of(context).colorScheme.primary,
-                        )
-                      : null,
-                ),
+          GestureDetector(
+            onTap: hasPhoto ? () => _showPhotoPreview(context, avatarBytes) : null,
+            child: Hero(
+              tag: 'avatar',
+              child: CircleAvatar(
+                radius: 40,
+                backgroundColor: Theme.of(context).colorScheme.surface,
+                backgroundImage: avatarBytes != null
+                    ? MemoryImage(avatarBytes)
+                    : (profile?.photoUrl?.isNotEmpty == true
+                        ? NetworkImage(profile!.photoUrl!)
+                        : null),
+                child: !hasPhoto
+                    ? Icon(
+                        Icons.person,
+                        size: 40,
+                        color: Theme.of(context).colorScheme.primary,
+                      )
+                    : null,
               ),
-              Positioned(
-                bottom: 0,
-                right: 0,
-                child: InkWell(
-                  onTap: () => _pickAndUploadPhoto(context, ref),
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: Theme.of(context).colorScheme.surface,
-                        width: 2,
-                      ),
-                    ),
-                    child: Icon(
-                      Icons.camera_alt,
-                      size: 16,
-                      color: Theme.of(context).colorScheme.onPrimary,
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(width: 20),
           Expanded(
@@ -519,6 +495,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   final _imagePicker = ImagePicker();
   File? _selectedImage;
   Uint8List? _initialPhotoBytes;
+  bool _isPhotoDeleted = false; // Track if photo was deleted
 
   @override
   void initState() {
@@ -538,6 +515,10 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
   }
 
   Future<void> _pickImage() async {
+    // Capture theme colors before async gap
+    final primaryColor = Theme.of(context).colorScheme.primary;
+    final onPrimaryColor = Theme.of(context).colorScheme.onPrimary;
+    
     try {
       final XFile? pickedFile = await _imagePicker.pickImage(
         source: ImageSource.gallery,
@@ -547,9 +528,36 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
       );
 
       if (pickedFile != null) {
-        setState(() {
-          _selectedImage = File(pickedFile.path);
-        });
+        // Open cropper with 1:1 aspect ratio
+        final croppedFile = await ImageCropper().cropImage(
+          sourcePath: pickedFile.path,
+          aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+          compressQuality: 85,
+          maxWidth: 512,
+          maxHeight: 512,
+          uiSettings: [
+            AndroidUiSettings(
+              toolbarTitle: 'Crop Foto Profil',
+              toolbarColor: primaryColor,
+              toolbarWidgetColor: onPrimaryColor,
+              activeControlsWidgetColor: primaryColor,
+              initAspectRatio: CropAspectRatioPreset.square,
+              lockAspectRatio: true,
+            ),
+            IOSUiSettings(
+              title: 'Crop Foto Profil',
+              aspectRatioLockEnabled: true,
+              resetAspectRatioEnabled: false,
+            ),
+          ],
+        );
+
+        // Only update state if user completed the crop (didn't cancel)
+        if (croppedFile != null && mounted) {
+          setState(() {
+            _selectedImage = File(croppedFile.path);
+          });
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -586,6 +594,7 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
       setState(() {
         _selectedImage = null;
         _initialPhotoBytes = null;
+        _isPhotoDeleted = true;
       });
       
       await ref.read(profileControllerProvider.notifier).deleteProfilePhoto(widget.profile!);
@@ -596,6 +605,9 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+
+    // Reset delete flag when saving (this is a normal save)
+    _isPhotoDeleted = false;
 
     final profile = UserProfile(
       id: widget.profile?.id ?? '',
@@ -627,16 +639,23 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
         data: (_) {
           if (previous?.isLoading == true) {
             Navigator.pop(context);
+            final message = _isPhotoDeleted
+                ? 'Foto profil berhasil dihapus'
+                : 'Profil berhasil diperbarui';
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Profil berhasil diperbarui'),
+              SnackBar(
+                content: Text(message),
                 backgroundColor: Colors.green,
               ),
             );
+            // Reset flag after showing message
+            _isPhotoDeleted = false;
           }
         },
         loading: () {},
         error: (error, _) {
+          // Reset flag on error
+          _isPhotoDeleted = false;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Gagal: $error'),
@@ -1187,5 +1206,98 @@ class _DevelopmentSectionState extends ConsumerState<_DevelopmentSection> {
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
+  }
+}
+
+// ==================== FULL SCREEN PHOTO VIEWER ====================
+
+class _FullScreenPhotoViewer extends StatelessWidget {
+  const _FullScreenPhotoViewer({
+    this.avatarBytes,
+    this.photoUrl,
+  });
+
+  final Uint8List? avatarBytes;
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      body: GestureDetector(
+        onTap: () => Navigator.pop(context),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Tap anywhere to dismiss
+            Container(color: Colors.black87),
+            // Interactive photo viewer with zoom/pan
+            SafeArea(
+              child: Center(
+                child: Hero(
+                  tag: 'avatar',
+                  child: InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 4.0,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: avatarBytes != null
+                          ? Image.memory(
+                              avatarBytes!,
+                              fit: BoxFit.contain,
+                            )
+                          : Image.network(
+                              photoUrl!,
+                              fit: BoxFit.contain,
+                              loadingBuilder: (context, child, loadingProgress) {
+                                if (loadingProgress == null) return child;
+                                return Center(
+                                  child: CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes != null
+                                        ? loadingProgress.cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    color: Colors.white,
+                                  ),
+                                );
+                              },
+                              errorBuilder: (context, error, stackTrace) {
+                                return const Icon(
+                                  Icons.broken_image,
+                                  size: 80,
+                                  color: Colors.white54,
+                                );
+                              },
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            // Close button
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 16,
+              right: 16,
+              child: Material(
+                color: Colors.black45,
+                shape: const CircleBorder(),
+                child: InkWell(
+                  onTap: () => Navigator.pop(context),
+                  customBorder: const CircleBorder(),
+                  child: const Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Icon(
+                      Icons.close,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
