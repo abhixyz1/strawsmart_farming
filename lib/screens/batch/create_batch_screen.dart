@@ -429,7 +429,7 @@ class _CreateBatchScreenState extends ConsumerState<CreateBatchScreen> {
       firstDate: DateTime.now().subtract(const Duration(days: 30)),
       lastDate: DateTime.now().add(const Duration(days: 30)),
     );
-    if (picked != null) {
+    if (picked != null && mounted) {
       setState(() => _plantingDate = picked);
     }
   }

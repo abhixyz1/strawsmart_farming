@@ -116,274 +116,17 @@ class _BatchDetailScreenState extends ConsumerState<BatchDetailScreen>
   }
 
   Future<void> _showAddJournalDialog(CultivationBatch batch) async {
-    final formKey = GlobalKey<FormState>();
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
-    final harvestController = TextEditingController();
-
-    JournalEntryType selectedType = JournalEntryType.note;
-    DateTime selectedDate = DateTime.now();
-    XFile? selectedPhoto;
-    bool isSaving = false;
-
-    await showModalBottomSheet(
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      builder: (sheetContext) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(sheetContext).viewInsets.bottom + 16,
-                left: 20,
-                right: 20,
-                top: 24,
-              ),
-              child: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Tambah Jurnal',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(sheetContext).pop(),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<JournalEntryType>(
-                        initialValue: selectedType,
-                        decoration: const InputDecoration(
-                          labelText: 'Tipe Aktivitas',
-                          border: OutlineInputBorder(),
-                        ),
-                        items: JournalEntryType.values.map((type) {
-                          return DropdownMenuItem(
-                            value: type,
-                            child: Row(
-                              children: [
-                                Text(type.emoji),
-                                const SizedBox(width: 8),
-                                Text(type.label),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            setModalState(() => selectedType = value);
-                          }
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      InkWell(
-                        onTap: () async {
-                          final picked = await showDatePicker(
-                            context: sheetContext,
-                            initialDate: selectedDate,
-                            firstDate: batch.plantingDate,
-                            lastDate: DateTime.now(),
-                          );
-                          if (picked != null) {
-                            setModalState(() => selectedDate = picked);
-                          }
-                        },
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Tanggal Aktivitas',
-                            border: OutlineInputBorder(),
-                            prefixIcon: Icon(Icons.calendar_today),
-                          ),
-                          child: Text(
-                            DateFormat('dd MMM yyyy', 'id_ID').format(selectedDate),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: titleController,
-                        decoration: const InputDecoration(
-                          labelText: 'Judul',
-                          border: OutlineInputBorder(),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Judul wajib diisi';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: descController,
-                        maxLines: 3,
-                        decoration: const InputDecoration(
-                          labelText: 'Deskripsi',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      if (selectedType == JournalEntryType.harvest) ...[
-                        TextFormField(
-                          controller: harvestController,
-                          keyboardType: TextInputType.number,
-                          decoration: const InputDecoration(
-                            labelText: 'Hasil Panen (kg)',
-                            border: OutlineInputBorder(),
-                            suffixText: 'kg',
-                          ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Jumlah panen wajib diisi';
-                            }
-                            if (double.tryParse(value) == null) {
-                              return 'Masukkan angka yang valid';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                      ],
-                      InkWell(
-                        onTap: () async {
-                          final image = await ImagePicker().pickImage(
-                            source: ImageSource.gallery,
-                            maxWidth: 1024,
-                            maxHeight: 1024,
-                            imageQuality: 75,
-                          );
-                          if (image != null) {
-                            setModalState(() => selectedPhoto = image);
-                          }
-                        },
-                        child: Container(
-                          height: 150,
-                          decoration: BoxDecoration(
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: selectedPhoto == null
-                              ? Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.add_a_photo, size: 36, color: Colors.grey),
-                                    SizedBox(height: 8),
-                                    Text('Tambah Foto (opsional)'),
-                                  ],
-                                )
-                              : Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: Image.file(
-                                        File(selectedPhoto!.path),
-                                        fit: BoxFit.cover,
-                                      ),
-                                    ),
-                                    Positioned(
-                                      top: 8,
-                                      right: 8,
-                                      child: CircleAvatar(
-                                        backgroundColor: Colors.black54,
-                                        child: IconButton(
-                                          icon: const Icon(Icons.close, color: Colors.white),
-                                          onPressed: () => setModalState(() => selectedPhoto = null),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      FilledButton.icon(
-                        onPressed: isSaving
-                            ? null
-                            : () async {
-                                if (!formKey.currentState!.validate()) return;
-                                setModalState(() => isSaving = true);
-
-                                try {
-                                  String? photoData;
-                                  if (selectedPhoto != null) {
-                                    final tempId = DateTime.now().millisecondsSinceEpoch.toString();
-                                    photoData = await ref
-                                        .read(photoUploadServiceProvider)
-                                        .uploadJournalPhoto(
-                                          batchId: batch.id,
-                                          entryId: tempId,
-                                          image: selectedPhoto!,
-                                        );
-                                  }
-
-                                  final entry = BatchJournalEntry(
-                                    id: '',
-                                    batchId: batch.id,
-                                    date: selectedDate,
-                                    type: selectedType,
-                                    title: titleController.text.trim(),
-                                    description: descController.text.trim().isEmpty
-                                        ? null
-                                        : descController.text.trim(),
-                                    harvestKg: selectedType == JournalEntryType.harvest
-                                        ? double.tryParse(harvestController.text)
-                                        : null,
-                                    photoUrls: photoData != null ? [photoData] : [],
-                                  );
-
-                                  await ref.read(batchRepositoryProvider).addJournalEntry(entry);
-
-                                  if (sheetContext.mounted && Navigator.canPop(sheetContext)) {
-                                    Navigator.of(sheetContext).pop();
-                                  }
-
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(this.context).showSnackBar(
-                                    const SnackBar(content: Text('Jurnal berhasil ditambahkan')),
-                                  );
-                                } catch (e) {
-                                  if (!mounted) return;
-                                  ScaffoldMessenger.of(this.context).showSnackBar(
-                                    SnackBar(content: Text('Gagal menambahkan jurnal: $e')),
-                                  );
-                                } finally {
-                                  if (context.mounted) {
-                                    setModalState(() => isSaving = false);
-                                  }
-                                }
-                              },
-                        icon: isSaving
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Icon(Icons.save),
-                        label: const Text('Simpan'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
+      builder: (sheetContext) => _AddJournalSheet(batch: batch),
     );
 
-    titleController.dispose();
-    descController.dispose();
-    harvestController.dispose();
+    if (result == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Jurnal berhasil ditambahkan')),
+      );
+    }
   }
 
   SliverAppBar _buildSliverAppBar(BuildContext context, CultivationBatch batch) {
@@ -2088,6 +1831,284 @@ class _PhotoErrorPlaceholder extends StatelessWidget {
             style: TextStyle(color: Colors.white),
           ),
         ],
+      ),
+    );
+  }
+}
+
+// ==================== ADD JOURNAL SHEET ====================
+
+class _AddJournalSheet extends ConsumerStatefulWidget {
+  const _AddJournalSheet({required this.batch});
+
+  final CultivationBatch batch;
+
+  @override
+  ConsumerState<_AddJournalSheet> createState() => _AddJournalSheetState();
+}
+
+class _AddJournalSheetState extends ConsumerState<_AddJournalSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+  final _harvestController = TextEditingController();
+
+  JournalEntryType _selectedType = JournalEntryType.note;
+  DateTime _selectedDate = DateTime.now();
+  XFile? _selectedPhoto;
+  bool _isSaving = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    _harvestController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickImage() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1024,
+      maxHeight: 1024,
+      imageQuality: 75,
+    );
+    if (image != null && mounted) {
+      setState(() => _selectedPhoto = image);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: widget.batch.plantingDate,
+      lastDate: DateTime.now(),
+    );
+    if (picked != null && mounted) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  Future<void> _handleSave() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (!mounted) return;
+
+    setState(() => _isSaving = true);
+
+    try {
+      String? photoData;
+      if (_selectedPhoto != null) {
+        if (!mounted) return;
+
+        final tempId = DateTime.now().millisecondsSinceEpoch.toString();
+        photoData = await ref.read(photoUploadServiceProvider).uploadJournalPhoto(
+          batchId: widget.batch.id,
+          entryId: tempId,
+          image: _selectedPhoto!,
+        );
+
+        if (!mounted) return;
+      }
+
+      final entry = BatchJournalEntry(
+        id: '',
+        batchId: widget.batch.id,
+        date: _selectedDate,
+        type: _selectedType,
+        title: _titleController.text.trim(),
+        description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+        harvestKg: _selectedType == JournalEntryType.harvest
+            ? double.tryParse(_harvestController.text)
+            : null,
+        photoUrls: photoData != null ? [photoData] : [],
+      );
+
+      await ref.read(batchRepositoryProvider).addJournalEntry(entry);
+
+      if (mounted) {
+        Navigator.of(context).pop(true); // Return true for success
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal menambahkan jurnal: $e')),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+        left: 20,
+        right: 20,
+        top: 24,
+      ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Tambah Jurnal',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<JournalEntryType>(
+                value: _selectedType,
+                decoration: const InputDecoration(
+                  labelText: 'Tipe Aktivitas',
+                  border: OutlineInputBorder(),
+                ),
+                items: JournalEntryType.values.map((type) {
+                  return DropdownMenuItem(
+                    value: type,
+                    child: Row(
+                      children: [
+                        Text(type.emoji),
+                        const SizedBox(width: 8),
+                        Text(type.label),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _selectedType = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 16),
+              InkWell(
+                onTap: _pickDate,
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Tanggal Aktivitas',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.calendar_today),
+                  ),
+                  child: Text(
+                    DateFormat('dd MMM yyyy', 'id_ID').format(_selectedDate),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(
+                  labelText: 'Judul',
+                  border: OutlineInputBorder(),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Judul wajib diisi';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Deskripsi',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_selectedType == JournalEntryType.harvest) ...[
+                TextFormField(
+                  controller: _harvestController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Hasil Panen (kg)',
+                    border: OutlineInputBorder(),
+                    suffixText: 'kg',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Jumlah panen wajib diisi';
+                    }
+                    if (double.tryParse(value) == null) {
+                      return 'Masukkan angka yang valid';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
+              InkWell(
+                onTap: _pickImage,
+                child: Container(
+                  height: 150,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: _selectedPhoto == null
+                      ? const Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.add_a_photo, size: 36, color: Colors.grey),
+                            SizedBox(height: 8),
+                            Text('Tambah Foto (opsional)'),
+                          ],
+                        )
+                      : Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                File(_selectedPhoto!.path),
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: CircleAvatar(
+                                backgroundColor: Colors.black54,
+                                child: IconButton(
+                                  icon: const Icon(Icons.close, color: Colors.white),
+                                  onPressed: () => setState(() => _selectedPhoto = null),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                onPressed: _isSaving ? null : _handleSave,
+                icon: _isSaving
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save),
+                label: const Text('Simpan'),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
