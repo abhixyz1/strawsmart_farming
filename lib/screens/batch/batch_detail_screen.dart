@@ -10,7 +10,7 @@ import '../../core/utils/image_utils.dart';
 import '../../core/widgets/timeline_indicator.dart';
 import '../../models/batch_daily_stats.dart';
 import '../../models/cultivation_batch.dart';
-import '../../services/photo_upload_service.dart';
+import '../../core/services/photo_upload_service.dart';
 import 'batch_repository.dart';
 import 'daily_stats_repository.dart';
 

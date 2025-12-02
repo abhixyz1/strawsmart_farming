@@ -111,3 +111,22 @@ CustomTransitionPage<T> buildSlideTransitionPage<T>({
     },
   );
 }
+
+/// Helper untuk GoRouter dengan fade transition (untuk initial splash)
+CustomTransitionPage<T> buildFadeTransitionPage<T>({
+  required GoRouterState state,
+  required Widget child,
+}) {
+  return CustomTransitionPage<T>(
+    key: state.pageKey,
+    transitionDuration: const Duration(milliseconds: 300),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    child: child,
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(
+        opacity: animation,
+        child: child,
+      );
+    },
+  );
+}

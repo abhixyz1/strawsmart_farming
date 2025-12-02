@@ -12,8 +12,8 @@ import '../batch/batch_management_screen.dart';
 import '../logs/logs_screen.dart';
 import '../../core/widgets/app_shell.dart';
 import '../../core/widgets/schedule_status_card.dart';
-import '../../services/schedule_executor_service.dart';
-import '../../widgets/greenhouse_selector.dart';
+import '../../core/services/schedule_executor_service.dart';
+import '../../core/widgets/greenhouse_selector.dart';
 import 'dashboard_repository.dart';
 import 'widgets/strawberry_guidance_section.dart';
 

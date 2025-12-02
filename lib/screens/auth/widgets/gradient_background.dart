@@ -13,7 +13,7 @@ class GradientBackground extends StatelessWidget {
         children: [
           // Background image
           Image.asset(
-            'assets/images/homestrawberry.jpg',
+            'assets/images/onboarding_farmer.png',
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
               return Container(color: const Color(0xFF0F2027));

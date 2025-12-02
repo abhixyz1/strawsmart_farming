@@ -5,7 +5,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../auth/auth_repository.dart';
 import '../auth/user_profile_repository.dart';
-import '../../services/photo_upload_service.dart';
+import '../../core/services/photo_upload_service.dart';
 
 class ProfileController extends StateNotifier<AsyncValue<void>> {
   ProfileController(this._repository, this._photoUploadService, this._ref)

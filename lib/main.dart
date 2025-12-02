@@ -10,15 +10,13 @@ import 'core/providers/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Initialize Firebase
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
   // Initialize Indonesian locale for date formatting
   await initializeDateFormatting('id_ID', null);
-  
+
   runApp(const ProviderScope(child: AppRoot()));
 }
 
@@ -29,7 +27,7 @@ class AppRoot extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(themeModeProvider);
-    
+
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,
       title: 'StrawSmart',

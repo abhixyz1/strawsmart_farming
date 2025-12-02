@@ -16,23 +16,21 @@ class AppTheme {
         },
       ),
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6B9080), // Soft green
+        seedColor: const Color(0xFFBE3A34),
         brightness: Brightness.light,
-        primary: const Color(0xFF6B9080),
-        secondary: const Color(0xFFA4C3B2),
-        tertiary: const Color(0xFFEAF4F4),
+        primary: const Color(0xFFBE3A34),
+        secondary: const Color(0xFFE46852),
+        tertiary: const Color(0xFFFFF0E8),
         surface: Colors.white,
-        surfaceContainerHighest: const Color(0xFFF6F8F7),
+        surfaceContainerHighest: const Color(0xFFFFF4EA),
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFFF6F8F7),
+        fillColor: const Color(0xFFFFF5F0),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -43,13 +41,16 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF6B9080), width: 2),
+          borderSide: const BorderSide(color: Color(0xFFBE3A34), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.red, width: 1),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -67,7 +68,10 @@ class AppTheme {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
         ),
       ),
-      textTheme: GoogleFonts.poppinsTextTheme(),
+      textTheme: GoogleFonts.urbanistTextTheme().apply(
+        bodyColor: const Color(0xFF3D1B16),
+        displayColor: const Color(0xFF3D1B16),
+      ),
     );
   }
 
@@ -86,30 +90,27 @@ class AppTheme {
         },
       ),
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF6B9080), // Soft green
+        seedColor: const Color(0xFFBE3A34),
         brightness: Brightness.dark,
-        // Dark mode specific colors
-        primary: const Color(0xFF88B39E), // Lighter green for better contrast
-        secondary: const Color(0xFFB5D4C6),
-        tertiary: const Color(0xFF2C3E3A),
-        surface: const Color(0xFF1A1C1E), // Dark background
-        surfaceContainerHighest: const Color(0xFF2B2D30), // Slightly lighter for cards
-        onSurface: const Color(0xFFE3E3E3), // Light text
-        onSurfaceVariant: const Color(0xFFB8B8B8), // Secondary text
-        outline: const Color(0xFF4A4A4A), // Borders
+        primary: const Color(0xFFFF8B6F),
+        secondary: const Color(0xFFFFB796),
+        tertiary: const Color(0xFF3B201F),
+        surface: const Color(0xFF1A1B1C),
+        surfaceContainerHighest: const Color(0xFF2B1F1E),
+        onSurface: const Color(0xFFE6E0DD),
+        onSurfaceVariant: const Color(0xFFB8ADA8),
+        outline: const Color(0xFF4C3C3A),
       ),
       // Card theme for dark mode
       cardTheme: CardThemeData(
         elevation: 0,
         color: const Color(0xFF2B2D30), // Dark card background
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       ),
       // Input decoration for dark mode
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: const Color(0xFF2B2D30), // Dark input background
+        fillColor: const Color(0xFF2A1D1C), // Dark input background
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -120,19 +121,22 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: Color(0xFF88B39E), width: 2),
+          borderSide: const BorderSide(color: Color(0xFFFF8B6F), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: Colors.redAccent, width: 1),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 16,
+        ),
       ),
       // Button themes for dark mode
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xFF88B39E),
-          foregroundColor: const Color(0xFF1A1C1E),
+          backgroundColor: const Color(0xFFFF8B6F),
+          foregroundColor: const Color(0xFF1A1B1C),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -141,8 +145,8 @@ class AppTheme {
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: const Color(0xFF88B39E),
-          side: const BorderSide(color: Color(0xFF88B39E)),
+          foregroundColor: const Color(0xFFFF8B6F),
+          side: const BorderSide(color: Color(0xFFFF8B6F)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -163,16 +167,13 @@ class AppTheme {
         elevation: 0,
       ),
       // Text theme with Poppins font
-      textTheme: GoogleFonts.poppinsTextTheme(
-        ThemeData.dark().textTheme,
-      ).apply(
-        bodyColor: const Color(0xFFE3E3E3),
-        displayColor: const Color(0xFFE3E3E3),
-      ),
+      textTheme: GoogleFonts.urbanistTextTheme(ThemeData.dark().textTheme)
+          .apply(
+            bodyColor: const Color(0xFFF4EAE6),
+            displayColor: const Color(0xFFF4EAE6),
+          ),
       // Icon theme
-      iconTheme: const IconThemeData(
-        color: Color(0xFFE3E3E3),
-      ),
+      iconTheme: const IconThemeData(color: Color(0xFFE3E3E3)),
     );
   }
 }
@@ -190,29 +191,20 @@ class _SmoothSlidePageTransitionsBuilder extends PageTransitionsBuilder {
   ) {
     // Use a more pronounced curve for better visibility
     const curve = Curves.easeOutQuart;
-    
+
     final slideAnimation = Tween<Offset>(
       begin: const Offset(1.0, 0.0), // Slide from right
       end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: animation,
-      curve: curve,
-    ));
+    ).animate(CurvedAnimation(parent: animation, curve: curve));
 
     final fadeAnimation = Tween<double>(
       begin: 0.0,
       end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: animation,
-      curve: Curves.easeIn,
-    ));
+    ).animate(CurvedAnimation(parent: animation, curve: Curves.easeIn));
 
     return SlideTransition(
       position: slideAnimation,
-      child: FadeTransition(
-        opacity: fadeAnimation,
-        child: child,
-      ),
+      child: FadeTransition(opacity: fadeAnimation, child: child),
     );
   }
 }
