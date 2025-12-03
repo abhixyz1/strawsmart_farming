@@ -233,7 +233,31 @@ class _UserCardState extends ConsumerState<_UserCard> {
                         ],
                       ),
                     )
-                  else
+                  else ...[
+                    // Info untuk Petani
+                    if (user.role == UserRole.petani)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: colorScheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline, size: 16, color: colorScheme.onTertiaryContainer),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Petani hanya dapat di-assign ke 1 greenhouse',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onTertiaryContainer,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     Wrap(
                       spacing: 8,
                       runSpacing: 8,
@@ -242,10 +266,15 @@ class _UserCardState extends ConsumerState<_UserCard> {
                         final deviceName = device['name'] as String? ?? deviceId;
                         final isAssigned = _userMemberships.contains(deviceId);
                         
+                        // Untuk Petani: disable chip lain jika sudah ada 1 GH ter-assign
+                        final isPetani = user.role == UserRole.petani;
+                        final hasAssignment = _userMemberships.isNotEmpty;
+                        final isDisabled = isPetani && hasAssignment && !isAssigned;
+                        
                         return FilterChip(
                           label: Text(deviceName),
                           selected: isAssigned,
-                          onSelected: _isLoading 
+                          onSelected: _isLoading || isDisabled
                               ? null 
                               : (selected) => _toggleAssignment(deviceId, selected),
                           avatar: Icon(
@@ -255,6 +284,7 @@ class _UserCardState extends ConsumerState<_UserCard> {
                         );
                       }).toList(),
                     ),
+                  ],
                   
                   const SizedBox(height: 12),
                   
@@ -263,9 +293,12 @@ class _UserCardState extends ConsumerState<_UserCard> {
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
-                          onPressed: _isLoading ? null : _assignAllDevices,
+                          // Disable "Assign Semua" untuk Petani yang sudah punya assignment
+                          onPressed: _isLoading || (user.role == UserRole.petani && _userMemberships.isNotEmpty)
+                              ? null 
+                              : _assignAllDevices,
                           icon: const Icon(Icons.select_all, size: 18),
-                          label: const Text('Assign Semua'),
+                          label: Text(user.role == UserRole.petani ? 'Assign 1 GH' : 'Assign Semua'),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -349,6 +382,29 @@ class _UserCardState extends ConsumerState<_UserCard> {
     setState(() => _isLoading = true);
     try {
       final helper = GreenhouseSetupHelper();
+      
+      // Untuk Petani: hanya assign 1 greenhouse pertama
+      if (widget.user.role == UserRole.petani) {
+        if (_userMemberships.isNotEmpty) {
+          _showSnackBar('Petani hanya boleh 1 greenhouse');
+          return;
+        }
+        
+        if (widget.devices.isNotEmpty) {
+          final firstDevice = widget.devices.first;
+          final deviceId = firstDevice['id'] as String;
+          await helper.assignUserToGreenhouse(
+            userId: widget.user.id,
+            greenhouseId: deviceId,
+            role: widget.user.role,
+          );
+          await _loadMemberships();
+          _showSnackBar('Berhasil di-assign ke 1 greenhouse');
+        }
+        return;
+      }
+      
+      // Untuk Admin/Owner: assign semua
       for (final device in widget.devices) {
         final deviceId = device['id'] as String;
         if (!_userMemberships.contains(deviceId)) {
