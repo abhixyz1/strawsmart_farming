@@ -110,14 +110,24 @@ class _UserCardState extends ConsumerState<_UserCard> {
   }
 
   Future<void> _loadMemberships() async {
-    final helper = GreenhouseSetupHelper();
-    final memberships = await helper.getUserMemberships(widget.user.id);
-    if (mounted) {
-      setState(() {
-        _userMemberships = memberships
-            .map((m) => m['greenhouseId'] as String)
-            .toList();
-      });
+    try {
+      final helper = GreenhouseSetupHelper();
+      final memberships = await helper.getUserMemberships(widget.user.id);
+      debugPrint('[UserManagement] Loaded memberships for ${widget.user.id}: ${memberships.length} items');
+      if (mounted) {
+        setState(() {
+          _userMemberships = memberships
+              .map((m) => m['greenhouseId'] as String)
+              .toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('[UserManagement] Error loading memberships for ${widget.user.id}: $e');
+      if (mounted) {
+        setState(() {
+          _userMemberships = [];
+        });
+      }
     }
   }
 

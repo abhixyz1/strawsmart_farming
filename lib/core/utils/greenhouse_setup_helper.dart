@@ -234,16 +234,54 @@ class GreenhouseSetupHelper {
   }
 
   /// Get list user memberships
+  /// Coba baca dari users/{userId}/memberships dulu,
+  /// jika gagal (permission denied), fallback ke devices/{deviceId}/members
   Future<List<Map<String, dynamic>>> getUserMemberships(String userId) async {
-    final snapshot = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('memberships')
-        .get();
+    try {
+      // Primary: baca dari users/{userId}/memberships
+      final snapshot = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('memberships')
+          .get();
 
-    return snapshot.docs.map((doc) => {
-      'greenhouseId': doc.id,
-      ...doc.data(),
-    }).toList();
+      debugPrint('[GreenhouseSetupHelper] getUserMemberships from users/$userId/memberships: ${snapshot.docs.length} items');
+
+      return snapshot.docs.map((doc) => {
+        'greenhouseId': doc.id,
+        ...doc.data(),
+      }).toList();
+    } catch (e) {
+      debugPrint('[GreenhouseSetupHelper] Failed to read users/$userId/memberships: $e');
+      debugPrint('[GreenhouseSetupHelper] Falling back to devices/*/members/$userId');
+
+      // Fallback: scan semua devices dan cek members
+      try {
+        final devicesSnapshot = await _firestore.collection('devices').get();
+        final memberships = <Map<String, dynamic>>[];
+
+        for (final device in devicesSnapshot.docs) {
+          final memberDoc = await _firestore
+              .collection('devices')
+              .doc(device.id)
+              .collection('members')
+              .doc(userId)
+              .get();
+
+          if (memberDoc.exists) {
+            memberships.add({
+              'greenhouseId': device.id,
+              ...?memberDoc.data(),
+            });
+          }
+        }
+
+        debugPrint('[GreenhouseSetupHelper] Fallback found ${memberships.length} memberships');
+        return memberships;
+      } catch (fallbackError) {
+        debugPrint('[GreenhouseSetupHelper] Fallback also failed: $fallbackError');
+        return [];
+      }
+    }
   }
 }
