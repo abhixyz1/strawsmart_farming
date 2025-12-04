@@ -3,248 +3,74 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../models/guidance_item.dart';
 import '../dashboard_repository.dart';
 
-/// Widget untuk menampilkan insight dan rekomendasi budidaya stroberi
+// ============================================================================
+// STRAWBERRY GUIDANCE SECTION - Modern Card Design with Sage Theme
+// ============================================================================
+
 class StrawberryGuidanceSection extends ConsumerWidget {
   const StrawberryGuidanceSection({super.key});
+
+  // Theme colors - Strawberry Rose (soft red-pink)
+  static const _primaryRose = Color(0xFFE57373);
+  static const _darkRose = Color(0xFFD32F2F);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final recommendations = ref.watch(strawberryGuidanceProvider);
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
 
-    // Jika tidak ada data sensor, tampilkan placeholder
     if (recommendations.isEmpty) {
-      return _buildPlaceholder(context);
+      return _buildPlaceholder(context, theme);
     }
 
-    // Ambil top 4 recommendations (prioritas tertinggi)
-    final topRecommendations = recommendations.take(4).toList();
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Section Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.lightbulb_outline,
-                  size: 24,
-                  color: colorScheme.primary,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Insight Budidaya Stroberi',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -0.5,
-                          ),
-                    ),
-                    Text(
-                      '${recommendations.length} rekomendasi tersedia',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Guidance Cards
-        ListView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          itemCount: topRecommendations.length,
-          itemBuilder: (context, index) {
-            final item = topRecommendations[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _GuidanceCard(item: item),
-            );
-          },
-        ),
-
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-  Widget _buildPlaceholder(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    // Show all recommendations (max 4)
+    final displayCount = recommendations.length > 4 ? 4 : recommendations.length;
+    final topRecommendations = recommendations.take(displayCount).toList();
 
     return Container(
-      margin: const EdgeInsets.all(24),
-      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-  color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.2),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            Icons.sensors_off_outlined,
-            size: 48,
-            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'Menunggu Data Sensor',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: colorScheme.onSurfaceVariant,
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Rekomendasi budidaya akan muncul setelah data sensor tersedia',
-            textAlign: TextAlign.center,
-    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-      color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                ),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((255 * 0.05).round()),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-    );
-  }
-}
-
-/// Widget untuk single guidance card
-class _GuidanceCard extends StatelessWidget {
-  const _GuidanceCard({required this.item});
-
-  final GuidanceItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    // Tentukan warna berdasarkan priority
-    Color backgroundColor;
-    Color borderColor;
-    Color iconColor;
-    IconData priorityIcon;
-
-    if (item.isCritical) {
-      backgroundColor = Colors.red.shade50;
-      borderColor = Colors.red.shade200;
-      iconColor = Colors.red.shade700;
-      priorityIcon = Icons.error_outline;
-    } else if (item.isWarning) {
-      backgroundColor = Colors.orange.shade50;
-      borderColor = Colors.orange.shade200;
-      iconColor = Colors.orange.shade700;
-      priorityIcon = Icons.warning_amber_outlined;
-    } else {
-      backgroundColor = Colors.green.shade50;
-      borderColor = Colors.green.shade200;
-      iconColor = Colors.green.shade700;
-      priorityIcon = Icons.check_circle_outline;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: borderColor,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
         children: [
-          // Icon
+          // Header
+          _buildHeader(context, theme),
+          // Divider
           Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              _getIconForType(item.type),
-              size: 24,
-              color: iconColor,
-            ),
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 20),
+            color: theme.colorScheme.outline.withAlpha((255 * 0.1).round()),
           ),
-          const SizedBox(width: 12),
-
-          // Content
-          Expanded(
+          // Recommendations
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Title with priority badge
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: iconColor,
+                ...topRecommendations.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final item = entry.value;
+                  return Column(
+                    children: [
+                      _GuidanceItem(item: item, index: index + 1),
+                      if (index < topRecommendations.length - 1)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          child: Container(
+                            height: 1,
+                            color: theme.colorScheme.outline.withAlpha((255 * 0.08).round()),
+                          ),
                         ),
-                      ),
-                    ),
-                    Icon(
-                      priorityIcon,
-                      size: 16,
-                      color: iconColor,
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-
-                // Description
-                Text(
-                  item.description,
-                  style: TextStyle(
-                    fontSize: 13,
-                    height: 1.4,
-                    color: colorScheme.onSurface.withValues(alpha: 0.8),
-                  ),
-                ),
-
-                // Sensor value if available
-                if (item.sensorValue != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'Nilai: ${item.sensorValue}',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: iconColor,
-                      ),
-                    ),
-                  ),
-                ],
+                    ],
+                  );
+                }),
               ],
             ),
           ),
@@ -253,22 +79,253 @@ class _GuidanceCard extends StatelessWidget {
     );
   }
 
-  IconData _getIconForType(GuidanceType type) {
-    switch (type) {
-      case GuidanceType.temperature:
-        return Icons.thermostat_outlined;
-      case GuidanceType.humidity:
-        return Icons.water_drop_outlined;
-      case GuidanceType.soilMoisture:
-        return Icons.grass_outlined;
-      case GuidanceType.light:
-        return Icons.wb_sunny_outlined;
-      case GuidanceType.watering:
-        return Icons.water_outlined;
-      case GuidanceType.ventilation:
-        return Icons.air_outlined;
-      case GuidanceType.general:
-        return Icons.info_outline;
-    }
+  Widget _buildHeader(BuildContext context, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      child: Row(
+        children: [
+          // Icon with gradient background
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [_primaryRose, _darkRose],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: _primaryRose.withAlpha((255 * 0.3).round()),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.eco_rounded,
+              size: 22,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Title & subtitle
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Insight Budidaya',
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Rekomendasi berdasarkan kondisi sensor',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+        ],
+      ),
+    );
   }
+
+  Widget _buildPlaceholder(BuildContext context, ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((255 * 0.05).round()),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: _primaryRose.withAlpha((255 * 0.1).round()),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(
+              Icons.sensors_rounded,
+              size: 28,
+              color: _primaryRose.withAlpha((255 * 0.6).round()),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Menunggu Data Sensor',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Insight akan muncul setelah data tersedia',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// GUIDANCE ITEM - Compact Row Design
+// ============================================================================
+
+class _GuidanceItem extends StatelessWidget {
+  const _GuidanceItem({
+    required this.item,
+    required this.index,
+  });
+
+  final GuidanceItem item;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = _getColors();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Icon with colored background
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: colors.background,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(
+            _getIcon(),
+            size: 20,
+            color: colors.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        // Content
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Title row with priority icon
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
+                  // Priority icon indicator
+                  Icon(
+                    _getPriorityIcon(),
+                    size: 16,
+                    color: _getPriorityColor(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // Description
+              Text(
+                item.description,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  height: 1.4,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Color _getPriorityColor() {
+    if (item.isCritical) return const Color(0xFFEF5350);
+    if (item.isWarning) return const Color(0xFFFFB74D);
+    return const Color(0xFF66BB6A);
+  }
+
+  IconData _getPriorityIcon() {
+    if (item.isCritical) return Icons.warning_rounded;
+    if (item.isWarning) return Icons.info_rounded;
+    return Icons.check_circle_rounded;
+  }
+
+  IconData _getIcon() {
+    return switch (item.type) {
+      GuidanceType.temperature => Icons.thermostat_rounded,
+      GuidanceType.humidity => Icons.water_drop_rounded,
+      GuidanceType.light => Icons.wb_sunny_rounded,
+      GuidanceType.soilMoisture => Icons.grass_rounded,
+      GuidanceType.watering => Icons.opacity_rounded,
+      GuidanceType.ventilation => Icons.air_rounded,
+      GuidanceType.general => Icons.eco_rounded,
+    };
+  }
+
+  _ItemColors _getColors() {
+    return switch (item.type) {
+      GuidanceType.temperature => _ItemColors(
+          primary: const Color(0xFFEF5350),
+          background: const Color(0xFFEF5350).withAlpha((255 * 0.1).round()),
+        ),
+      GuidanceType.humidity => _ItemColors(
+          primary: const Color(0xFF42A5F5),
+          background: const Color(0xFF42A5F5).withAlpha((255 * 0.1).round()),
+        ),
+      GuidanceType.light => _ItemColors(
+          primary: const Color(0xFFFFB74D),
+          background: const Color(0xFFFFB74D).withAlpha((255 * 0.1).round()),
+        ),
+      GuidanceType.soilMoisture || GuidanceType.watering => _ItemColors(
+          primary: const Color(0xFF66BB6A),
+          background: const Color(0xFF66BB6A).withAlpha((255 * 0.1).round()),
+        ),
+      GuidanceType.ventilation || GuidanceType.general => _ItemColors(
+          primary: const Color(0xFF9575CD),
+          background: const Color(0xFF9575CD).withAlpha((255 * 0.1).round()),
+        ),
+    };
+  }
+}
+
+class _ItemColors {
+  final Color primary;
+  final Color background;
+
+  const _ItemColors({
+    required this.primary,
+    required this.background,
+  });
 }
