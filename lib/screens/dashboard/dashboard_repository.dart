@@ -71,17 +71,8 @@ class DashboardRepository {
     // New structure: pump state is in info/pumpActive
     return _deviceRef.child('info').onValue.map((event) {
       final data = _castSnapshot(event.snapshot.value);
-      
-  debugPrint('[DashboardRepo] watchPump: path=devices/$deviceId/info, data=$data');
-      
-      if (data == null) {
-  debugPrint('[DashboardRepo] watchPump: No data at /info, returning null');
-        return null;
-      }
-      
-      final pump = PumpStatusData.fromJson(data);
-  debugPrint('[DashboardRepo] watchPump: Parsed pump status=${pump.status}, isOn=${pump.isOn}');
-      return pump;
+      if (data == null) return null;
+      return PumpStatusData.fromJson(data);
     });
   }
 
@@ -199,15 +190,21 @@ class DeviceStatusData {
   final bool autoLogicEnabled;
 
   /// Returns true if device is considered online.
-  /// Checks both the 'online' flag and if lastSeenMillis is within 60 seconds.
+  /// Based ONLY on lastSeenAt timestamp - if device hasn't reported
+  /// in the last 60 seconds, it's considered offline.
+  /// This works even when device is suddenly turned off (like Wokwi)
+  /// because we don't rely on the device sending isOnline: false.
   bool get isDeviceOnline {
-    if (online) return true;
-    
     final lastSeen = lastSeenMillis;
     if (lastSeen == null) return false;
     
+    // Convert lastSeen from Unix seconds to milliseconds for comparison
+    // Firebase stores lastSeenAt in Unix seconds (e.g., 1764855706)
+    final lastSeenMs = lastSeen * 1000;
     final now = DateTime.now().millisecondsSinceEpoch;
-    final diffSeconds = (now - lastSeen) / 1000;
+    final diffSeconds = (now - lastSeenMs) / 1000;
+    
+    // Device is online only if seen within last 60 seconds
     return diffSeconds <= 60;
   }
 

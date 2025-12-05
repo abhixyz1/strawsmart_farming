@@ -90,26 +90,36 @@ class _GreenhouseDropdown extends ConsumerWidget {
         }
 
         return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            ),
           ),
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: selectedId,
-              hint: Text(
-                'Pilih Greenhouse',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              isDense: true,
               icon: Icon(
                 Icons.keyboard_arrow_down,
+                size: 20,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
               borderRadius: BorderRadius.circular(12),
+              menuMaxHeight: MediaQuery.of(context).size.height * 0.4,
+              selectedItemBuilder: (context) {
+                return memberships.map((m) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.eco,
+                        size: 18,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ],
+                  );
+                }).toList();
+              },
               items: memberships.map((m) => _buildDropdownItem(context, m)).toList(),
               onChanged: (value) {
                 if (value != null) {

@@ -45,6 +45,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  bool _isPressed = false;
 
   @override
   void initState() {
@@ -144,14 +145,18 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                   _buildStatusDot(
                     isActive: widget.status?.isDeviceOnline ?? false,
                     activeColor: const Color(0xFF66BB6A),
-                    label: 'Online',
+                    inactiveColor: const Color(0xFFEF5350),
+                    activeLabel: 'Online',
+                    inactiveLabel: 'Offline',
                     isPumpOn: isPumpOn,
                   ),
                   const SizedBox(width: 16),
                   _buildStatusDot(
                     isActive: widget.status?.autoLogicEnabled ?? false,
                     activeColor: const Color(0xFF9575CD),
-                    label: 'Fuzzy',
+                    inactiveColor: Colors.grey,
+                    activeLabel: 'Fuzzy',
+                    inactiveLabel: 'Fuzzy',
                     isPumpOn: isPumpOn,
                   ),
                 ],
@@ -206,9 +211,13 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
       bool isPumpOn, bool canToggle, bool isViewOnly) {
     
     final buttonSize = 100.0;
+    final isInteractive = canToggle && !isViewOnly;
     
     return GestureDetector(
-      onTap: (canToggle && !isViewOnly)
+      onTapDown: isInteractive ? (_) => setState(() => _isPressed = true) : null,
+      onTapUp: isInteractive ? (_) => setState(() => _isPressed = false) : null,
+      onTapCancel: isInteractive ? () => setState(() => _isPressed = false) : null,
+      onTap: isInteractive
           ? () {
               HapticFeedback.mediumImpact();
               widget.onPumpToggle(!isPumpOn);
@@ -217,12 +226,15 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
       child: AnimatedBuilder(
         animation: _pulseAnimation,
         builder: (context, child) {
+          final baseScale = isPumpOn ? _pulseAnimation.value : 1.0;
+          final pressScale = _isPressed ? 0.92 : 1.0;
           return Transform.scale(
-            scale: isPumpOn ? _pulseAnimation.value : 1.0,
+            scale: baseScale * pressScale,
             child: child,
           );
         },
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           width: buttonSize,
           height: buttonSize,
           decoration: BoxDecoration(
@@ -234,18 +246,31 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                     end: Alignment.bottomRight,
                   )
                 : LinearGradient(
-                    colors: [
-                      theme.colorScheme.surface,
-                      theme.colorScheme.surfaceContainerLow,
-                    ],
+                    colors: isInteractive
+                        ? [
+                            PumpControlCard._primaryRose.withAlpha((255 * 0.1).round()),
+                            PumpControlCard._primaryRose.withAlpha((255 * 0.05).round()),
+                          ]
+                        : [
+                            theme.colorScheme.surface,
+                            theme.colorScheme.surfaceContainerLow,
+                          ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
+            border: isInteractive && !isPumpOn
+                ? Border.all(
+                    color: PumpControlCard._primaryRose.withAlpha((255 * 0.5).round()),
+                    width: 2,
+                  )
+                : null,
             boxShadow: [
               BoxShadow(
                 color: isPumpOn
                     ? const Color(0xFF4CAF50).withAlpha((255 * 0.4).round())
-                    : Colors.black.withAlpha((255 * 0.1).round()),
+                    : isInteractive
+                        ? PumpControlCard._primaryRose.withAlpha((255 * 0.2).round())
+                        : Colors.black.withAlpha((255 * 0.1).round()),
                 blurRadius: isPumpOn ? 24 : 12,
                 offset: const Offset(0, 6),
               ),
@@ -433,9 +458,18 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   Widget _buildStatusDot({
     required bool isActive,
     required Color activeColor,
-    required String label,
+    Color? inactiveColor,
+    required String activeLabel,
+    String? inactiveLabel,
     required bool isPumpOn,
   }) {
+    final label = isActive ? activeLabel : (inactiveLabel ?? activeLabel);
+    final dotColor = isActive 
+        ? activeColor 
+        : (isPumpOn 
+            ? (inactiveColor ?? Colors.grey).withAlpha((255 * 0.7).round())
+            : (inactiveColor ?? Colors.grey).withAlpha((255 * 0.5).round()));
+    
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -444,11 +478,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
           height: 8,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isActive 
-                ? activeColor 
-                : (isPumpOn 
-                    ? Colors.white.withAlpha((255 * 0.3).round())
-                    : Colors.grey.withAlpha((255 * 0.3).round())),
+            color: dotColor,
             boxShadow: isActive
                 ? [
                     BoxShadow(
@@ -465,7 +495,9 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
           label,
           style: TextStyle(
             fontSize: 11,
-            color: isPumpOn ? Colors.white70 : Colors.grey[600],
+            color: isPumpOn 
+                ? (isActive ? Colors.white70 : Colors.white60)
+                : (isActive ? Colors.grey[700] : Colors.grey[500]),
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
           ),
         ),

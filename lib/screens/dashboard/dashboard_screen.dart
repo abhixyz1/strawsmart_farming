@@ -32,6 +32,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedIndex = 0;
   bool _isSendingPumpCommand = false;
   bool _isUpdatingControlMode = false;
+  
+  // Rate limiting for mode switching
+  DateTime? _lastModeChangeTime;
+  int _modeChangeCount = 0;
+  static const _modeChangeThreshold = 3; // Max changes allowed
+  static const _modeChangeCooldown = Duration(seconds: 10); // Reset window
 
   // ---------------------------------------------------------------------------
   // Konstanta navigasi
@@ -283,6 +289,25 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Future<void> _setControlMode(ControlMode mode) async {
     if (_isUpdatingControlMode) return;
 
+    // Rate limiting check
+    final now = DateTime.now();
+    if (_lastModeChangeTime != null) {
+      final elapsed = now.difference(_lastModeChangeTime!);
+      if (elapsed < _modeChangeCooldown) {
+        _modeChangeCount++;
+        if (_modeChangeCount >= _modeChangeThreshold) {
+          _showRateLimitAlert();
+          return;
+        }
+      } else {
+        // Reset counter after cooldown
+        _modeChangeCount = 1;
+      }
+    } else {
+      _modeChangeCount = 1;
+    }
+    _lastModeChangeTime = now;
+
     setState(() => _isUpdatingControlMode = true);
     try {
       await ref.read(dashboardRepositoryProvider).setControlMode(mode);
@@ -292,6 +317,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } finally {
       if (mounted) setState(() => _isUpdatingControlMode = false);
     }
+  }
+
+  void _showRateLimitAlert() {
+    if (!mounted) return;
+    
+    // Calculate remaining cooldown time
+    final remainingSeconds = _lastModeChangeTime != null
+        ? (_modeChangeCooldown.inSeconds - DateTime.now().difference(_lastModeChangeTime!).inSeconds).clamp(0, _modeChangeCooldown.inSeconds)
+        : _modeChangeCooldown.inSeconds;
+    
+    showDialog(
+      context: context,
+      builder: (context) => _RateLimitDialog(
+        initialSeconds: remainingSeconds,
+        onComplete: () => Navigator.pop(context),
+      ),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -335,5 +377,143 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       return '${duration.inMinutes} mnt $seconds dtk';
     }
     return '${duration.inSeconds} dtk';
+  }
+}
+
+// =============================================================================
+// Rate Limit Dialog with Countdown Timer
+// =============================================================================
+
+class _RateLimitDialog extends StatefulWidget {
+  const _RateLimitDialog({
+    required this.initialSeconds,
+    required this.onComplete,
+  });
+
+  final int initialSeconds;
+  final VoidCallback onComplete;
+
+  @override
+  State<_RateLimitDialog> createState() => _RateLimitDialogState();
+}
+
+class _RateLimitDialogState extends State<_RateLimitDialog> {
+  late int _remainingSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingSeconds = widget.initialSeconds;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingSeconds > 0) {
+        setState(() => _remainingSeconds--);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isComplete = _remainingSeconds <= 0;
+    
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          // Animated timer circle
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: CircularProgressIndicator(
+                  value: isComplete ? 1.0 : _remainingSeconds / widget.initialSeconds,
+                  strokeWidth: 6,
+                  backgroundColor: Colors.grey.withAlpha((255 * 0.2).round()),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isComplete ? const Color(0xFF66BB6A) : const Color(0xFFFFB74D),
+                  ),
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isComplete ? Icons.check_rounded : Icons.timer_rounded,
+                    size: 28,
+                    color: isComplete ? const Color(0xFF66BB6A) : const Color(0xFFFFB74D),
+                  ),
+                  if (!isComplete) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '$_remainingSeconds',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFFFB74D),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Title
+          Text(
+            isComplete ? 'Siap!' : 'Terlalu Cepat!',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Message
+          Text(
+            isComplete 
+                ? 'Anda dapat mengubah mode kembali.'
+                : 'Tunggu $_remainingSeconds detik sebelum\nmengubah mode lagi.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Button
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: widget.onComplete,
+              style: FilledButton.styleFrom(
+                backgroundColor: isComplete 
+                    ? const Color(0xFF66BB6A) 
+                    : const Color(0xFFFFB74D),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(isComplete ? 'Lanjutkan' : 'Mengerti'),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
