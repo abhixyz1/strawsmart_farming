@@ -199,7 +199,9 @@ class DeviceStatusData {
   final bool autoLogicEnabled;
 
   /// Returns true if device is considered online.
-  /// Checks both the 'online' flag and if lastSeenMillis is within 60 seconds.
+  /// Checks both the 'online' flag and if lastSeenMillis is within 45 seconds.
+  /// Since data is transmitted every 30 seconds, 45 seconds provides a buffer
+  /// for network latency while still being responsive to actual offline events.
   bool get isDeviceOnline {
     if (online) return true;
     
@@ -208,7 +210,7 @@ class DeviceStatusData {
     
     final now = DateTime.now().millisecondsSinceEpoch;
     final diffSeconds = (now - lastSeen) / 1000;
-    return diffSeconds <= 60;
+    return diffSeconds <= 45;
   }
 
   /// Returns a human-readable string showing connection status.
@@ -228,7 +230,7 @@ class DeviceStatusData {
     
     if (diffSeconds < 5) {
       return 'Terhubung (live)';
-    } else if (diffSeconds < 60) {
+    } else if (diffSeconds < 45) {
       return 'Terhubung $diffSeconds detik lalu';
     } else {
       return 'Terhubung';
