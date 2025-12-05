@@ -38,6 +38,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _modeChangeCount = 0;
   static const _modeChangeThreshold = 3; // Max changes allowed
   static const _modeChangeCooldown = Duration(seconds: 10); // Reset window
+  
+  // Rate limiting for pump toggle
+  DateTime? _lastPumpToggleTime;
+  int _pumpToggleCount = 0;
+  static const _pumpToggleThreshold = 5; // Max toggles allowed
+  static const _pumpToggleCooldown = Duration(seconds: 15); // Reset window
 
   // ---------------------------------------------------------------------------
   // Konstanta navigasi
@@ -262,15 +268,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (_isSendingPumpCommand) return;
 
     final isOnline = status?.isDeviceOnline ?? false;
+    
+    // Alert jika device offline
     if (!isOnline) {
-      // Tidak ada aksi - tombol tidak responsif saat offline
+      _showOfflineAlert();
       return;
     }
 
+    // Alert jika mode auto dan mencoba menyalakan pompa
     if (desiredState && mode != ControlMode.manual) {
-      // Tidak ada aksi - tombol tidak responsif di mode otomatis
+      _showAutoModeAlert();
       return;
     }
+    
+    // Rate limiting untuk pump toggle
+    final now = DateTime.now();
+    if (_lastPumpToggleTime != null) {
+      final elapsed = now.difference(_lastPumpToggleTime!);
+      if (elapsed < _pumpToggleCooldown) {
+        _pumpToggleCount++;
+        if (_pumpToggleCount >= _pumpToggleThreshold) {
+          _showPumpRateLimitAlert();
+          return;
+        }
+      } else {
+        // Reset counter after cooldown
+        _pumpToggleCount = 1;
+      }
+    } else {
+      _pumpToggleCount = 1;
+    }
+    _lastPumpToggleTime = now;
 
     setState(() => _isSendingPumpCommand = true);
     try {
@@ -284,6 +312,142 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     } finally {
       if (mounted) setState(() => _isSendingPumpCommand = false);
     }
+  }
+  
+  void _showOfflineAlert() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF5350).withAlpha((255 * 0.1).round()),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.wifi_off_rounded,
+                size: 40,
+                color: Color(0xFFEF5350),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Perangkat Offline',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tidak dapat mengontrol pompa karena\nperangkat tidak terhubung.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFEF5350),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Mengerti'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showAutoModeAlert() {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF9575CD).withAlpha((255 * 0.1).round()),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.auto_mode_rounded,
+                size: 40,
+                color: Color(0xFF9575CD),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Mode Otomatis Aktif',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Pompa dikontrol oleh sistem Fuzzy.\nGanti ke mode Manual untuk kontrol manual.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.grey[600],
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: () => Navigator.pop(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF9575CD),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Mengerti'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  void _showPumpRateLimitAlert() {
+    if (!mounted) return;
+    
+    final remainingSeconds = _lastPumpToggleTime != null
+        ? (_pumpToggleCooldown.inSeconds - DateTime.now().difference(_lastPumpToggleTime!).inSeconds).clamp(0, _pumpToggleCooldown.inSeconds)
+        : _pumpToggleCooldown.inSeconds;
+    
+    showDialog(
+      context: context,
+      builder: (context) => _PumpRateLimitDialog(
+        initialSeconds: remainingSeconds,
+        onComplete: () => Navigator.pop(context),
+      ),
+    );
   }
 
   Future<void> _setControlMode(ControlMode mode) async {
@@ -504,6 +668,144 @@ class _RateLimitDialogState extends State<_RateLimitDialog> {
                 backgroundColor: isComplete 
                     ? const Color(0xFF66BB6A) 
                     : const Color(0xFFFFB74D),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(isComplete ? 'Lanjutkan' : 'Mengerti'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ============================================================================
+// Pump Rate Limit Dialog - Dialog untuk rate limit toggle pompa
+// ============================================================================
+
+class _PumpRateLimitDialog extends StatefulWidget {
+  const _PumpRateLimitDialog({
+    required this.initialSeconds,
+    required this.onComplete,
+  });
+  
+  final int initialSeconds;
+  final VoidCallback onComplete;
+
+  @override
+  State<_PumpRateLimitDialog> createState() => _PumpRateLimitDialogState();
+}
+
+class _PumpRateLimitDialogState extends State<_PumpRateLimitDialog> {
+  late int _remainingSeconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _remainingSeconds = widget.initialSeconds;
+    _startTimer();
+  }
+
+  void _startTimer() {
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_remainingSeconds > 0) {
+        setState(() => _remainingSeconds--);
+      } else {
+        timer.cancel();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isComplete = _remainingSeconds <= 0;
+    
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 8),
+          // Animated timer circle with water drop icon
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: CircularProgressIndicator(
+                  value: isComplete ? 1.0 : _remainingSeconds / widget.initialSeconds,
+                  strokeWidth: 6,
+                  backgroundColor: Colors.grey.withAlpha((255 * 0.2).round()),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isComplete ? const Color(0xFF66BB6A) : const Color(0xFF42A5F5),
+                  ),
+                ),
+              ),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    isComplete ? Icons.check_rounded : Icons.water_drop_rounded,
+                    size: 28,
+                    color: isComplete ? const Color(0xFF66BB6A) : const Color(0xFF42A5F5),
+                  ),
+                  if (!isComplete) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      '$_remainingSeconds',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF42A5F5),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          // Title
+          Text(
+            isComplete ? 'Siap!' : 'Pompa Perlu Istirahat',
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          // Message
+          Text(
+            isComplete 
+                ? 'Anda dapat mengontrol pompa kembali.'
+                : 'Terlalu sering toggle pompa.\nTunggu $_remainingSeconds detik.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.grey[600],
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 20),
+          // Button
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: widget.onComplete,
+              style: FilledButton.styleFrom(
+                backgroundColor: isComplete 
+                    ? const Color(0xFF66BB6A) 
+                    : const Color(0xFF42A5F5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

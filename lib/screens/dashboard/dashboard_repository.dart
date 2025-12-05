@@ -1,5 +1,4 @@
 import 'package:firebase_database/firebase_database.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/strawberry_guidance.dart';
 import '../../models/guidance_item.dart';
@@ -22,8 +21,34 @@ final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
 final latestTelemetryProvider =
     StreamProvider<SensorSnapshot?>((ref) => ref.watch(dashboardRepositoryProvider).watchLatest());
 
-final deviceStatusProvider =
+final _rawDeviceStatusProvider =
     StreamProvider<DeviceStatusData?>((ref) => ref.watch(dashboardRepositoryProvider).watchStatus());
+
+/// Combined device status provider that includes telemetry timestamp for better online detection.
+/// Uses local receive time to determine if device is online.
+/// Note: lastReceivedTime is computed at build time based on current DateTime.now()
+final deviceStatusProvider = Provider<AsyncValue<DeviceStatusData?>>((ref) {
+  final statusAsync = ref.watch(_rawDeviceStatusProvider);
+  final telemetryAsync = ref.watch(latestTelemetryProvider);
+  
+  final telemetryTimestamp = telemetryAsync.valueOrNull?.timestampMillis;
+  
+  return statusAsync.when(
+    data: (status) {
+      if (status == null) return const AsyncValue.data(null);
+      
+      // Use current time as "last received" since we're actively receiving data
+      // This avoids the need for a separate StateProvider that can't be modified during build
+      final lastReceived = DateTime.now();
+      final enrichedStatus = status.withTelemetryTimestamp(telemetryTimestamp)
+          .withLastReceivedTime(lastReceived);
+      
+      return AsyncValue.data(enrichedStatus);
+    },
+    loading: () => const AsyncValue.loading(),
+    error: (e, st) => AsyncValue.error(e, st),
+  );
+});
 
 final pumpStatusProvider =
     StreamProvider<PumpStatusData?>((ref) => ref.watch(dashboardRepositoryProvider).watchPump());
@@ -180,6 +205,8 @@ class DeviceStatusData {
     this.freeMemory,
     this.uptimeMillis,
     required this.autoLogicEnabled,
+    this.telemetryTimestampMillis,
+    this.lastReceivedTime,
   });
 
   final bool online;
@@ -188,48 +215,92 @@ class DeviceStatusData {
   final int? freeMemory;
   final int? uptimeMillis;
   final bool autoLogicEnabled;
+  final int? telemetryTimestampMillis; // From latest/ sensor data
+  final DateTime? lastReceivedTime; // LOCAL time when Flutter received data
 
-  /// Returns true if device is considered online.
-  /// Based ONLY on lastSeenAt timestamp - if device hasn't reported
-  /// in the last 60 seconds, it's considered offline.
-  /// This works even when device is suddenly turned off (like Wokwi)
-  /// because we don't rely on the device sending isOnline: false.
-  bool get isDeviceOnline {
-    final lastSeen = lastSeenMillis;
-    if (lastSeen == null) return false;
+  /// Returns the most recent activity timestamp (in milliseconds).
+  /// Uses the most recent between lastSeenAt and telemetry timestamp.
+  /// Handles both Unix seconds and milliseconds formats.
+  int? get mostRecentActivityMs {
+    int? lastSeenMs;
+    int? telemetryMs;
     
-    // Convert lastSeen from Unix seconds to milliseconds for comparison
-    // Firebase stores lastSeenAt in Unix seconds (e.g., 1764855706)
-    final lastSeenMs = lastSeen * 1000;
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final diffSeconds = (now - lastSeenMs) / 1000;
+    // Convert lastSeenMillis (which is actually Unix seconds) to milliseconds
+    if (lastSeenMillis != null) {
+      // If value is small (< year 2000 in seconds), it's already seconds
+      // Unix seconds for year 2000 = 946684800
+      // If value is large (> 1e12), it's already milliseconds
+      if (lastSeenMillis! > 1e12) {
+        lastSeenMs = lastSeenMillis; // Already milliseconds
+      } else {
+        lastSeenMs = lastSeenMillis! * 1000; // Convert seconds to ms
+      }
+    }
     
-    // Device is online only if seen within last 60 seconds
-    return diffSeconds <= 60;
+    // Same for telemetry timestamp
+    if (telemetryTimestampMillis != null) {
+      if (telemetryTimestampMillis! > 1e12) {
+        telemetryMs = telemetryTimestampMillis; // Already milliseconds
+      } else {
+        telemetryMs = telemetryTimestampMillis! * 1000; // Convert seconds to ms
+      }
+    }
+    
+    if (lastSeenMs == null && telemetryMs == null) return null;
+    if (lastSeenMs == null) return telemetryMs;
+    if (telemetryMs == null) return lastSeenMs;
+    
+    // Return the more recent one
+    return lastSeenMs > telemetryMs ? lastSeenMs : telemetryMs;
   }
 
-  /// Returns a human-readable string showing connection status.
-  /// Examples: "Terhubung 5 detik lalu" or "Perangkat offline"
-  String get connectionStatusLabel {
-    if (!isDeviceOnline) {
-      return 'Perangkat offline';
+  /// Returns true if device is considered online.
+  /// Uses LOCAL receive time (when Flutter received data from Firebase).
+  /// This is more reliable than device timestamps which may be out of sync.
+  /// If no data received in the last 90 seconds, device is considered offline.
+  bool get isDeviceOnline {
+    // PRIMARY: Use local receive time (most reliable)
+    if (lastReceivedTime != null) {
+      final diffSeconds = DateTime.now().difference(lastReceivedTime!).inSeconds;
+      return diffSeconds <= 90;
     }
     
-    final lastSeen = lastSeenMillis;
-    if (lastSeen == null) {
-      return 'Terhubung';
-    }
+    // FALLBACK: Use device timestamps if local time not available
+    final mostRecentMs = mostRecentActivityMs;
+    if (mostRecentMs == null) return false;
     
     final now = DateTime.now().millisecondsSinceEpoch;
-    final diffSeconds = ((now - lastSeen) / 1000).round();
+    final diffSeconds = (now - mostRecentMs) / 1000;
     
-    if (diffSeconds < 5) {
-      return 'Terhubung (live)';
-    } else if (diffSeconds < 60) {
-      return 'Terhubung $diffSeconds detik lalu';
-    } else {
-      return 'Terhubung';
-    }
+    return diffSeconds <= 90;
+  }
+
+  /// Create a copy with telemetry timestamp added
+  DeviceStatusData withTelemetryTimestamp(int? telemetryTimestamp) {
+    return DeviceStatusData(
+      online: online,
+      lastSeenMillis: lastSeenMillis,
+      wifiSignalStrength: wifiSignalStrength,
+      freeMemory: freeMemory,
+      uptimeMillis: uptimeMillis,
+      autoLogicEnabled: autoLogicEnabled,
+      telemetryTimestampMillis: telemetryTimestamp,
+      lastReceivedTime: lastReceivedTime,
+    );
+  }
+  
+  /// Create a copy with local receive time added
+  DeviceStatusData withLastReceivedTime(DateTime? receivedTime) {
+    return DeviceStatusData(
+      online: online,
+      lastSeenMillis: lastSeenMillis,
+      wifiSignalStrength: wifiSignalStrength,
+      freeMemory: freeMemory,
+      uptimeMillis: uptimeMillis,
+      autoLogicEnabled: autoLogicEnabled,
+      telemetryTimestampMillis: telemetryTimestampMillis,
+      lastReceivedTime: receivedTime,
+    );
   }
 
   factory DeviceStatusData.fromJson(Map<String, dynamic> json) {

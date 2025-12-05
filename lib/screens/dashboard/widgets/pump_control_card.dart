@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,6 +48,12 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
   bool _isPressed = false;
+  
+  // Stabilized online status to prevent flickering
+  bool _stableOnlineStatus = false;
+  bool? _pendingOnlineStatus;
+  Timer? _statusDebounceTimer;
+  static const _statusDebounceDelay = Duration(seconds: 3);
 
   @override
   void initState() {
@@ -57,11 +65,57 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    // Initialize stable status
+    _stableOnlineStatus = widget.status?.isDeviceOnline ?? false;
+  }
+  
+  /// Debounced online status update to prevent flickering.
+  /// - Goes ONLINE immediately when data arrives
+  /// - Only goes OFFLINE after 3 seconds of consistent offline status
+  void _updateStableOnlineStatus() {
+    final currentOnline = widget.status?.isDeviceOnline ?? false;
+    
+    // If going ONLINE, update immediately (no debounce)
+    if (currentOnline && !_stableOnlineStatus) {
+      _statusDebounceTimer?.cancel();
+      _pendingOnlineStatus = null;
+      setState(() {
+        _stableOnlineStatus = true;
+      });
+      return;
+    }
+    
+    // If already matches stable status, cancel any pending change
+    if (currentOnline == _stableOnlineStatus) {
+      _statusDebounceTimer?.cancel();
+      _pendingOnlineStatus = null;
+      return;
+    }
+    
+    // Going OFFLINE - debounce to prevent flickering
+    if (!currentOnline && _stableOnlineStatus) {
+      if (_pendingOnlineStatus != false) {
+        _pendingOnlineStatus = false;
+        _statusDebounceTimer?.cancel();
+        _statusDebounceTimer = Timer(_statusDebounceDelay, () {
+          if (mounted && _pendingOnlineStatus == false) {
+            setState(() {
+              _stableOnlineStatus = false;
+              _pendingOnlineStatus = null;
+            });
+          }
+        });
+      }
+    }
   }
 
   @override
   void didUpdateWidget(PumpControlCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    
+    // Update stable online status with debounce
+    _updateStableOnlineStatus();
+    
     // Animate when pump is on
     if (widget.pump.isOn && !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
@@ -73,6 +127,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
 
   @override
   void dispose() {
+    _statusDebounceTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
@@ -80,7 +135,8 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final online = widget.status?.isDeviceOnline ?? false;
+    // Use stabilized online status to prevent flickering
+    final online = _stableOnlineStatus;
 
     final profile = ref.watch(currentUserProfileProvider).valueOrNull;
     final canControlPump = profile?.role.canControlPump ?? false;
@@ -117,6 +173,8 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   Widget _buildHeroSection(BuildContext context, ThemeData theme, 
       bool canControl, bool canToggle, bool isViewOnly) {
     final isPumpOn = widget.pump.isOn;
+    // Use stabilized online status
+    final isOnline = _stableOnlineStatus;
     
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
@@ -143,7 +201,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
               Row(
                 children: [
                   _buildStatusDot(
-                    isActive: widget.status?.isDeviceOnline ?? false,
+                    isActive: isOnline,
                     activeColor: const Color(0xFF66BB6A),
                     inactiveColor: const Color(0xFFEF5350),
                     activeLabel: 'Online',
@@ -152,7 +210,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                   ),
                   const SizedBox(width: 16),
                   _buildStatusDot(
-                    isActive: widget.status?.autoLogicEnabled ?? false,
+                    isActive: (widget.status?.autoLogicEnabled ?? false) && isOnline,
                     activeColor: const Color(0xFF9575CD),
                     inactiveColor: Colors.grey,
                     activeLabel: 'Fuzzy',
