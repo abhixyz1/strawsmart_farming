@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +47,13 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   
   late AnimationController _pulseController;
   late Animation<double> _pulseAnimation;
+  bool _isPressed = false;
+  
+  // Stabilized online status to prevent flickering
+  bool _stableOnlineStatus = false;
+  bool? _pendingOnlineStatus;
+  Timer? _statusDebounceTimer;
+  static const _statusDebounceDelay = Duration(seconds: 3);
 
   @override
   void initState() {
@@ -56,11 +65,57 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
       CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
+    // Initialize stable status
+    _stableOnlineStatus = widget.status?.isDeviceOnline ?? false;
+  }
+  
+  /// Debounced online status update to prevent flickering.
+  /// - Goes ONLINE immediately when data arrives
+  /// - Only goes OFFLINE after 3 seconds of consistent offline status
+  void _updateStableOnlineStatus() {
+    final currentOnline = widget.status?.isDeviceOnline ?? false;
+    
+    // If going ONLINE, update immediately (no debounce)
+    if (currentOnline && !_stableOnlineStatus) {
+      _statusDebounceTimer?.cancel();
+      _pendingOnlineStatus = null;
+      setState(() {
+        _stableOnlineStatus = true;
+      });
+      return;
+    }
+    
+    // If already matches stable status, cancel any pending change
+    if (currentOnline == _stableOnlineStatus) {
+      _statusDebounceTimer?.cancel();
+      _pendingOnlineStatus = null;
+      return;
+    }
+    
+    // Going OFFLINE - debounce to prevent flickering
+    if (!currentOnline && _stableOnlineStatus) {
+      if (_pendingOnlineStatus != false) {
+        _pendingOnlineStatus = false;
+        _statusDebounceTimer?.cancel();
+        _statusDebounceTimer = Timer(_statusDebounceDelay, () {
+          if (mounted && _pendingOnlineStatus == false) {
+            setState(() {
+              _stableOnlineStatus = false;
+              _pendingOnlineStatus = null;
+            });
+          }
+        });
+      }
+    }
   }
 
   @override
   void didUpdateWidget(PumpControlCard oldWidget) {
     super.didUpdateWidget(oldWidget);
+    
+    // Update stable online status with debounce
+    _updateStableOnlineStatus();
+    
     // Animate when pump is on
     if (widget.pump.isOn && !_pulseController.isAnimating) {
       _pulseController.repeat(reverse: true);
@@ -72,6 +127,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
 
   @override
   void dispose() {
+    _statusDebounceTimer?.cancel();
     _pulseController.dispose();
     super.dispose();
   }
@@ -79,7 +135,8 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final online = widget.status?.isDeviceOnline ?? false;
+    // Use stabilized online status to prevent flickering
+    final online = _stableOnlineStatus;
 
     final profile = ref.watch(currentUserProfileProvider).valueOrNull;
     final canControlPump = profile?.role.canControlPump ?? false;
@@ -116,6 +173,8 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   Widget _buildHeroSection(BuildContext context, ThemeData theme, 
       bool canControl, bool canToggle, bool isViewOnly) {
     final isPumpOn = widget.pump.isOn;
+    // Use stabilized online status
+    final isOnline = _stableOnlineStatus;
     
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
@@ -142,16 +201,20 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
               Row(
                 children: [
                   _buildStatusDot(
-                    isActive: widget.status?.isDeviceOnline ?? false,
+                    isActive: isOnline,
                     activeColor: const Color(0xFF66BB6A),
-                    label: 'Online',
+                    inactiveColor: const Color(0xFFEF5350),
+                    activeLabel: 'Online',
+                    inactiveLabel: 'Offline',
                     isPumpOn: isPumpOn,
                   ),
                   const SizedBox(width: 16),
                   _buildStatusDot(
-                    isActive: widget.status?.autoLogicEnabled ?? false,
+                    isActive: (widget.status?.autoLogicEnabled ?? false) && isOnline,
                     activeColor: const Color(0xFF9575CD),
-                    label: 'Fuzzy',
+                    inactiveColor: Colors.grey,
+                    activeLabel: 'Fuzzy',
+                    inactiveLabel: 'Fuzzy',
                     isPumpOn: isPumpOn,
                   ),
                 ],
@@ -206,9 +269,13 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
       bool isPumpOn, bool canToggle, bool isViewOnly) {
     
     final buttonSize = 100.0;
+    final isInteractive = canToggle && !isViewOnly;
     
     return GestureDetector(
-      onTap: (canToggle && !isViewOnly)
+      onTapDown: isInteractive ? (_) => setState(() => _isPressed = true) : null,
+      onTapUp: isInteractive ? (_) => setState(() => _isPressed = false) : null,
+      onTapCancel: isInteractive ? () => setState(() => _isPressed = false) : null,
+      onTap: isInteractive
           ? () {
               HapticFeedback.mediumImpact();
               widget.onPumpToggle(!isPumpOn);
@@ -217,12 +284,15 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
       child: AnimatedBuilder(
         animation: _pulseAnimation,
         builder: (context, child) {
+          final baseScale = isPumpOn ? _pulseAnimation.value : 1.0;
+          final pressScale = _isPressed ? 0.92 : 1.0;
           return Transform.scale(
-            scale: isPumpOn ? _pulseAnimation.value : 1.0,
+            scale: baseScale * pressScale,
             child: child,
           );
         },
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
           width: buttonSize,
           height: buttonSize,
           decoration: BoxDecoration(
@@ -234,18 +304,31 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                     end: Alignment.bottomRight,
                   )
                 : LinearGradient(
-                    colors: [
-                      theme.colorScheme.surface,
-                      theme.colorScheme.surfaceContainerLow,
-                    ],
+                    colors: isInteractive
+                        ? [
+                            PumpControlCard._primaryRose.withAlpha((255 * 0.1).round()),
+                            PumpControlCard._primaryRose.withAlpha((255 * 0.05).round()),
+                          ]
+                        : [
+                            theme.colorScheme.surface,
+                            theme.colorScheme.surfaceContainerLow,
+                          ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
+            border: isInteractive && !isPumpOn
+                ? Border.all(
+                    color: PumpControlCard._primaryRose.withAlpha((255 * 0.5).round()),
+                    width: 2,
+                  )
+                : null,
             boxShadow: [
               BoxShadow(
                 color: isPumpOn
                     ? const Color(0xFF4CAF50).withAlpha((255 * 0.4).round())
-                    : Colors.black.withAlpha((255 * 0.1).round()),
+                    : isInteractive
+                        ? PumpControlCard._primaryRose.withAlpha((255 * 0.2).round())
+                        : Colors.black.withAlpha((255 * 0.1).round()),
                 blurRadius: isPumpOn ? 24 : 12,
                 offset: const Offset(0, 6),
               ),
@@ -433,9 +516,18 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   Widget _buildStatusDot({
     required bool isActive,
     required Color activeColor,
-    required String label,
+    Color? inactiveColor,
+    required String activeLabel,
+    String? inactiveLabel,
     required bool isPumpOn,
   }) {
+    final label = isActive ? activeLabel : (inactiveLabel ?? activeLabel);
+    final dotColor = isActive 
+        ? activeColor 
+        : (isPumpOn 
+            ? (inactiveColor ?? Colors.grey).withAlpha((255 * 0.7).round())
+            : (inactiveColor ?? Colors.grey).withAlpha((255 * 0.5).round()));
+    
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -444,11 +536,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
           height: 8,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: isActive 
-                ? activeColor 
-                : (isPumpOn 
-                    ? Colors.white.withAlpha((255 * 0.3).round())
-                    : Colors.grey.withAlpha((255 * 0.3).round())),
+            color: dotColor,
             boxShadow: isActive
                 ? [
                     BoxShadow(
@@ -465,7 +553,9 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
           label,
           style: TextStyle(
             fontSize: 11,
-            color: isPumpOn ? Colors.white70 : Colors.grey[600],
+            color: isPumpOn 
+                ? (isActive ? Colors.white70 : Colors.white60)
+                : (isActive ? Colors.grey[700] : Colors.grey[500]),
             fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
           ),
         ),

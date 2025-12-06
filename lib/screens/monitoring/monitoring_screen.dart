@@ -1,53 +1,78 @@
-import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
+import 'package:shimmer/shimmer.dart';
+
 import 'monitoring_repository.dart';
 
-class MonitoringScreen extends ConsumerWidget {
+class MonitoringScreen extends ConsumerStatefulWidget {
   const MonitoringScreen({super.key});
+  @override
+  ConsumerState<MonitoringScreen> createState() => _MonitoringScreenState();
+}
 
-  /// Refresh callback untuk pull-to-refresh dan refresh button
-  Future<void> _handleRefresh(WidgetRef ref) async {
-    HapticFeedback.mediumImpact();
-    ref.invalidate(historicalReadingsProvider);
-    // Wait sedikit untuk give feedback ke user
-    await Future.delayed(const Duration(milliseconds: 300));
+class _MonitoringScreenState extends ConsumerState<MonitoringScreen> {
+  late ZoomPanBehavior _tempHumidityZoom;
+  late ZoomPanBehavior _soilMoistureZoom;
+  late ZoomPanBehavior _lightIntensityZoom;
+  bool _showTemperature = true;
+  bool _showHumidity = true;
+  bool _showSoilMoisture = true;
+  bool _showLightIntensity = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initZoomBehaviors();
+  }
+
+  void _initZoomBehaviors() {
+    _tempHumidityZoom = ZoomPanBehavior(
+      enablePinching: true,
+      enablePanning: true,
+      enableDoubleTapZooming: true,
+      enableMouseWheelZooming: true,
+      zoomMode: ZoomMode.x,
+    );
+    _soilMoistureZoom = ZoomPanBehavior(
+      enablePinching: true,
+      enablePanning: true,
+      enableDoubleTapZooming: true,
+      enableMouseWheelZooming: true,
+      zoomMode: ZoomMode.x,
+    );
+    _lightIntensityZoom = ZoomPanBehavior(
+      enablePinching: true,
+      enablePanning: true,
+      enableDoubleTapZooming: true,
+      enableMouseWheelZooming: true,
+      zoomMode: ZoomMode.x,
+    );
+  }
+
+  void _resetAllZoom() {
+    _tempHumidityZoom.reset();
+    _soilMoistureZoom.reset();
+    _lightIntensityZoom.reset();
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final readingsAsync = ref.watch(historicalReadingsProvider);
-    final selectedDate = ref.watch(selectedMonitoringDateProvider);
+  Widget build(BuildContext context) {
+    final dateRange = ref.watch(monitoringDateRangeProvider);
+    final readingsAsync = ref.watch(historicalReadingsByRangeProvider);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     
-    // Use cached value if available during loading
-    final readings = readingsAsync.valueOrNull ?? [];
-    final isLoading = readingsAsync.isLoading && !readingsAsync.hasValue;
-    final error = readingsAsync.error;
-
     return Scaffold(
       body: Column(
         children: [
-          // Date Picker Header - Selalu tampil
-          _DatePickerHeader(selectedDate: selectedDate),
-          const Divider(height: 1),
-          
-          // Content Area
+          _buildDateRangeBar(context, dateRange),
           Expanded(
-            child: RefreshIndicator(
-              color: Theme.of(context).colorScheme.primary,
-              onRefresh: () => _handleRefresh(ref),
-              child: isLoading
-                  ? const _ShimmerLoadingState()
-                  : error != null && readings.isEmpty
-                      ? _ErrorStateWidget(
-                          error: error,
-                          onRetry: () => ref.invalidate(historicalReadingsProvider),
-                        )
-                      : readings.isEmpty
-                          ? _EmptyStateWidget(selectedDate: selectedDate)
-                          : _MonitoringContent(readings: readings),
+            child: readingsAsync.when(
+              loading: () => ShimmerLoading(isDark: isDark),
+              error: (e, _) => ErrorState(error: e.toString(), onRetry: () => ref.invalidate(historicalReadingsByRangeProvider)),
+              data: (readings) => readings.isEmpty ? EmptyState(isDark: isDark) : _buildContent(context, readings),
             ),
           ),
         ],
@@ -55,1138 +80,543 @@ class MonitoringScreen extends ConsumerWidget {
     );
   }
 
-  /// Menampilkan date picker dialog
-  static Future<void> showMonitoringDatePicker(BuildContext context, WidgetRef ref) async {
-    final selectedDate = ref.read(selectedMonitoringDateProvider);
-    
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime(2024, 1, 1),
-      lastDate: DateTime.now(),
-      locale: const Locale('id', 'ID'),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: Theme.of(context).colorScheme.copyWith(
-              primary: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-
-    if (picked != null && picked != selectedDate) {
-      ref.read(selectedMonitoringDateProvider.notifier).state = picked;
-    }
-  }
-}
-
-/// Widget header dengan date picker yang selalu tampil
-class _DatePickerHeader extends ConsumerWidget {
-  const _DatePickerHeader({required this.selectedDate});
-
-  final DateTime selectedDate;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final formattedDate = DateFormat('dd MMMM yyyy', 'id_ID').format(selectedDate);
-    
-    return Container(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.primaryContainer.withValues(alpha: 0.6),
-            colorScheme.primaryContainer.withValues(alpha: 0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Pilih Tanggal Data',
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: InkWell(
-                  onTap: () => MonitoringScreen.showMonitoringDatePicker(context, ref),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colorScheme.primary.withValues(alpha: 0.4),
-                        width: 2,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colorScheme.primary.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.calendar_today_rounded,
-                          size: 22,
-                          color: colorScheme.primary,
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            formattedDate,
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                        ),
-                        Icon(
-                          Icons.arrow_drop_down_rounded,
-                          color: colorScheme.primary,
-                          size: 28,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              
-              // Quick navigation buttons
-              IconButton(
-                icon: Icon(Icons.chevron_left_rounded, color: colorScheme.primary),
-                tooltip: 'Hari sebelumnya',
-                onPressed: () {
-                  ref.read(selectedMonitoringDateProvider.notifier).state = 
-                      selectedDate.subtract(const Duration(days: 1));
-                },
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.surface,
-                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.today_rounded, color: colorScheme.primary),
-                tooltip: 'Hari ini',
-                onPressed: () {
-                  ref.read(selectedMonitoringDateProvider.notifier).state = DateTime.now();
-                },
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.surface,
-                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
-                ),
-              ),
-              IconButton(
-                icon: Icon(Icons.chevron_right_rounded, color: colorScheme.primary),
-                tooltip: 'Hari berikutnya',
-                onPressed: () {
-                  final nextDay = selectedDate.add(const Duration(days: 1));
-                  if (nextDay.isBefore(DateTime.now().add(const Duration(days: 1)))) {
-                    ref.read(selectedMonitoringDateProvider.notifier).state = nextDay;
-                  }
-                },
-                style: IconButton.styleFrom(
-                  backgroundColor: colorScheme.surface,
-                  side: BorderSide(color: colorScheme.primary.withValues(alpha: 0.3)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MonitoringContent extends ConsumerStatefulWidget {
-  const _MonitoringContent({required this.readings});
-
-  final List<HistoricalReading> readings;
-
-  @override
-  ConsumerState<_MonitoringContent> createState() => _MonitoringContentState();
-}
-
-class _MonitoringContentState extends ConsumerState<_MonitoringContent> {
-  // Filter interval options (in minutes, 0 = show all)
-  int _selectedInterval = 5; // Default 5 menit
-
-  List<HistoricalReading> _getFilteredReadings() {
-    if (_selectedInterval == 0) {
-      // Show all data
-      return widget.readings;
-    }
-
-    // Apply interval filter
-    if (widget.readings.isEmpty) return widget.readings;
-
-    final filtered = <HistoricalReading>[];
-    DateTime? lastIncludedTime;
-
-    for (final reading in widget.readings) {
-      if (lastIncludedTime == null) {
-        filtered.add(reading);
-        lastIncludedTime = reading.timestamp;
-      } else {
-        final difference = lastIncludedTime.difference(reading.timestamp).abs();
-        if (difference.inMinutes >= _selectedInterval) {
-          filtered.add(reading);
-          lastIncludedTime = reading.timestamp;
-        }
-      }
-    }
-
-    return filtered;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filteredReadings = _getFilteredReadings();
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Filter Selector with Date Picker
-          _buildFilterSelector(context),
-          const SizedBox(height: 24),
-          
-          // Temperature & Humidity Chart Section
-          _ChartSection(
-            title: 'Grafik Suhu & Kelembaban',
-            subtitle: _getFilterSubtitle(),
-            icon: Icons.show_chart,
-            child: _TempHumidityChart(readings: filteredReadings),
-          ),
-          const SizedBox(height: 24),
-          
-          // Soil Moisture Chart Section
-          _ChartSection(
-            title: 'Grafik Kelembaban Tanah',
-            subtitle: _getFilterSubtitle(),
-            icon: Icons.water_drop,
-            child: _SoilMoistureChart(readings: filteredReadings),
-          ),
-          const SizedBox(height: 24),
-          
-          // Historical Readings Table
-          _ChartSection(
-            title: 'Riwayat Pembacaan Sensor',
-            subtitle: '${_getFilterSubtitle()} • Maks 50 baris',
-            icon: Icons.table_chart,
-            child: _HistoricalTable(readings: filteredReadings),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _getFilterSubtitle() {
-    final selectedDate = ref.watch(selectedMonitoringDateProvider);
-    final dateStr = DateFormat('dd MMM yyyy', 'id_ID').format(selectedDate);
-    
-    String intervalStr;
-    if (_selectedInterval == 0) {
-      intervalStr = 'Semua data';
-    } else if (_selectedInterval >= 60) {
-      final hours = _selectedInterval ~/ 60;
-      intervalStr = '1 data per $hours jam';
-    } else {
-      intervalStr = '1 data per $_selectedInterval menit';
-    }
-    
-    return '$intervalStr • $dateStr';
-  }
-
-  Widget _buildFilterSelector(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final filteredReadings = _getFilteredReadings();
-    
-    // Interval Filter Row - Date picker sudah dipindah ke header
+  Widget _buildDateRangeBar(BuildContext context, MonitoringDateRange dateRange) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: colorScheme.outline.withValues(alpha: 0.2),
-          width: 1,
-        ),
+        color: colorScheme.surface,
+        border: Border(bottom: BorderSide(color: colorScheme.outlineVariant)),
       ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.filter_list_rounded,
-            size: 20,
-            color: colorScheme.primary,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Interval Data:',
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: colorScheme.surface,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                  color: colorScheme.outline.withValues(alpha: 0.3),
-                  width: 1,
-                ),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<int>(
-                  value: _selectedInterval,
-                  isDense: true,
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 20,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
-                  onChanged: (int? value) {
-                    if (value != null) {
-                      setState(() => _selectedInterval = value);
-                    }
-                  },
-                  items: const [
-                    DropdownMenuItem(
-                      value: 0,
-                      child: Text(
-                        'Semua Data',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 1,
-                      child: Text(
-                        '1 Menit',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 5,
-                      child: Text(
-                        '5 Menit',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 10,
-                      child: Text(
-                        '10 Menit',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 30,
-                      child: Text(
-                        '30 Menit',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    DropdownMenuItem(
-                      value: 60,
-                      child: Text(
-                        '1 Jam',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: colorScheme.primary,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.analytics_outlined,
-                  size: 14,
-                  color: colorScheme.onPrimary,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  '${filteredReadings.length}',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onPrimary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            ...MonitoringRangePreset.values.map((p) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: PresetChip(label: p.label, isSelected: dateRange.preset == p, onTap: () => ref.read(monitoringDateRangeProvider.notifier).setPreset(p)),
+            )),
+            Container(width: 1, height: 24, color: colorScheme.outlineVariant),
+            const SizedBox(width: 12),
+            PresetChip(label: 'Custom', isSelected: dateRange.preset == null, onTap: () => _showCustomDatePicker(context), icon: Icons.date_range),
+          ],
+        ),
       ),
     );
   }
-}
 
-class _ChartSection extends StatelessWidget {
-  const _ChartSection({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.child,
-  });
+  Future<void> _showCustomDatePicker(BuildContext context) async {
+    final range = ref.read(monitoringDateRangeProvider);
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      initialDateRange: DateTimeRange(start: range.startDate, end: range.endDate),
+    );
+    if (picked != null) ref.read(monitoringDateRangeProvider.notifier).setCustomRange(picked.start, picked.end);
+  }
 
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildContent(BuildContext context, List<HistoricalReading> readings) {
+    final sorted = List<HistoricalReading>.from(readings)..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    
+    // Calculate X-axis range with padding
+    final dateRange = ref.read(monitoringDateRangeProvider);
+    final xMin = dateRange.startDate;
+    final xMax = dateRange.endDate;
+    
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primaryContainer,
-                    Theme.of(context).colorScheme.secondaryContainer,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(
-                icon,
-                color: Theme.of(context).colorScheme.primary,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -0.5,
-                        ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        ChartCard(title: 'Suhu & Kelembaban', legendItems: [
+          LegendItemData('Suhu', const Color(0xFFFF6B6B), _showTemperature, () => setState(() => _showTemperature = !_showTemperature)),
+          LegendItemData('Kelembaban', const Color(0xFF4ECDC4), _showHumidity, () => setState(() => _showHumidity = !_showHumidity)),
+        ], chart: _buildTempHumidityChart(context, sorted, xMin, xMax), onResetZoom: () => _tempHumidityZoom.reset()),
         const SizedBox(height: 16),
-        child,
+        ChartCard(title: 'Kelembaban Tanah', legendItems: [
+          LegendItemData('Tanah', const Color(0xFF45B7D1), _showSoilMoisture, () => setState(() => _showSoilMoisture = !_showSoilMoisture)),
+        ], chart: _buildSoilMoistureChart(context, sorted, xMin, xMax), onResetZoom: () => _soilMoistureZoom.reset()),
+        const SizedBox(height: 16),
+        ChartCard(title: 'Intensitas Cahaya', legendItems: [
+          LegendItemData('Cahaya', const Color(0xFFFFE66D), _showLightIntensity, () => setState(() => _showLightIntensity = !_showLightIntensity)),
+        ], chart: _buildLightIntensityChart(context, sorted, xMin, xMax), onResetZoom: () => _lightIntensityZoom.reset()),
+        const SizedBox(height: 24),
+        HistoricalDataTable(readings: readings),
+      ],
+    );
+  }
+
+  // Helper to calculate interval based on range
+  DateTimeIntervalType _getIntervalType(DateTime min, DateTime max) {
+    final diff = max.difference(min);
+    if (diff.inHours <= 24) return DateTimeIntervalType.hours;
+    if (diff.inDays <= 7) return DateTimeIntervalType.days;
+    if (diff.inDays <= 90) return DateTimeIntervalType.days;
+    return DateTimeIntervalType.months;
+  }
+
+  double _getInterval(DateTime min, DateTime max) {
+    final diff = max.difference(min);
+    if (diff.inHours <= 24) return 4; // every 4 hours
+    if (diff.inDays <= 7) return 1; // every day
+    if (diff.inDays <= 30) return 5; // every 5 days
+    if (diff.inDays <= 90) return 15; // every 15 days
+    return 30; // every month
+  }
+
+  String _getDateFormat(DateTime min, DateTime max) {
+    final diff = max.difference(min);
+    if (diff.inHours <= 24) return 'HH:mm';
+    if (diff.inDays <= 7) return 'dd/MM';
+    return 'dd/MM';
+  }
+
+  Widget _buildTempHumidityChart(BuildContext context, List<HistoricalReading> data, DateTime xMin, DateTime xMax) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final gridColor = colorScheme.outlineVariant;
+    final labelColor = colorScheme.onSurfaceVariant;
+    final isSinglePoint = data.length == 1;
+    
+    return SfCartesianChart(
+      plotAreaBorderWidth: 0,
+      zoomPanBehavior: _tempHumidityZoom,
+      trackballBehavior: TrackballBehavior(
+        enable: true,
+        activationMode: ActivationMode.singleTap,
+        tooltipSettings: InteractiveTooltip(
+          color: colorScheme.surfaceContainerHighest,
+          textStyle: TextStyle(color: colorScheme.onSurface),
+        ),
+        lineType: TrackballLineType.vertical,
+        lineColor: gridColor,
+      ),
+      primaryXAxis: DateTimeAxis(
+        minimum: xMin,
+        maximum: xMax,
+        intervalType: _getIntervalType(xMin, xMax),
+        interval: _getInterval(xMin, xMax),
+        majorGridLines: MajorGridLines(color: gridColor),
+        axisLine: AxisLine(color: gridColor),
+        labelStyle: TextStyle(color: labelColor, fontSize: 10),
+        dateFormat: DateFormat(_getDateFormat(xMin, xMax)),
+      ),
+      primaryYAxis: NumericAxis(
+        majorGridLines: MajorGridLines(color: gridColor),
+        axisLine: AxisLine(color: gridColor),
+        labelStyle: TextStyle(color: labelColor, fontSize: 10),
+        minimum: 0,
+        maximum: 100,
+      ),
+      series: <CartesianSeries<HistoricalReading, DateTime>>[
+        if (_showTemperature && !isSinglePoint) SplineAreaSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.temperature ?? 0, name: 'Suhu', color: const Color(0xFFFF6B6B).withValues(alpha: 0.3), borderColor: const Color(0xFFFF6B6B), borderWidth: 2),
+        if (_showTemperature && isSinglePoint) ScatterSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.temperature ?? 0, name: 'Suhu', color: const Color(0xFFFF6B6B), markerSettings: const MarkerSettings(isVisible: true, width: 12, height: 12)),
+        if (_showHumidity && !isSinglePoint) SplineAreaSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.humidity ?? 0, name: 'Kelembaban', color: const Color(0xFF4ECDC4).withValues(alpha: 0.3), borderColor: const Color(0xFF4ECDC4), borderWidth: 2),
+        if (_showHumidity && isSinglePoint) ScatterSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.humidity ?? 0, name: 'Kelembaban', color: const Color(0xFF4ECDC4), markerSettings: const MarkerSettings(isVisible: true, width: 12, height: 12)),
+      ],
+    );
+  }
+
+  Widget _buildSoilMoistureChart(BuildContext context, List<HistoricalReading> data, DateTime xMin, DateTime xMax) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final gridColor = colorScheme.outlineVariant;
+    final labelColor = colorScheme.onSurfaceVariant;
+    final isSinglePoint = data.length == 1;
+    
+    return SfCartesianChart(
+      plotAreaBorderWidth: 0,
+      zoomPanBehavior: _soilMoistureZoom,
+      trackballBehavior: TrackballBehavior(
+        enable: true,
+        activationMode: ActivationMode.singleTap,
+        tooltipSettings: InteractiveTooltip(
+          color: colorScheme.surfaceContainerHighest,
+          textStyle: TextStyle(color: colorScheme.onSurface),
+        ),
+        lineType: TrackballLineType.vertical,
+        lineColor: gridColor,
+      ),
+      primaryXAxis: DateTimeAxis(
+        minimum: xMin,
+        maximum: xMax,
+        intervalType: _getIntervalType(xMin, xMax),
+        interval: _getInterval(xMin, xMax),
+        majorGridLines: MajorGridLines(color: gridColor),
+        axisLine: AxisLine(color: gridColor),
+        labelStyle: TextStyle(color: labelColor, fontSize: 10),
+        dateFormat: DateFormat(_getDateFormat(xMin, xMax)),
+      ),
+      primaryYAxis: NumericAxis(
+        majorGridLines: MajorGridLines(color: gridColor),
+        axisLine: AxisLine(color: gridColor),
+        labelStyle: TextStyle(color: labelColor, fontSize: 10),
+        minimum: 0,
+        maximum: 100,
+      ),
+      series: <CartesianSeries<HistoricalReading, DateTime>>[
+        if (_showSoilMoisture && !isSinglePoint) SplineAreaSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.soilMoisturePercent ?? 0, name: 'Tanah', color: const Color(0xFF45B7D1).withValues(alpha: 0.3), borderColor: const Color(0xFF45B7D1), borderWidth: 2),
+        if (_showSoilMoisture && isSinglePoint) ScatterSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.soilMoisturePercent ?? 0, name: 'Tanah', color: const Color(0xFF45B7D1), markerSettings: const MarkerSettings(isVisible: true, width: 12, height: 12)),
+      ],
+    );
+  }
+
+  Widget _buildLightIntensityChart(BuildContext context, List<HistoricalReading> data, DateTime xMin, DateTime xMax) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final gridColor = colorScheme.outlineVariant;
+    final labelColor = colorScheme.onSurfaceVariant;
+    final isSinglePoint = data.length == 1;
+    final maxL = data.isNotEmpty ? data.map((r) => r.lightIntensity ?? 0).reduce((a, b) => a > b ? a : b) : 10000.0;
+    
+    return SfCartesianChart(
+      plotAreaBorderWidth: 0,
+      zoomPanBehavior: _lightIntensityZoom,
+      trackballBehavior: TrackballBehavior(
+        enable: true,
+        activationMode: ActivationMode.singleTap,
+        tooltipSettings: InteractiveTooltip(
+          color: colorScheme.surfaceContainerHighest,
+          textStyle: TextStyle(color: colorScheme.onSurface),
+        ),
+        lineType: TrackballLineType.vertical,
+        lineColor: gridColor,
+      ),
+      primaryXAxis: DateTimeAxis(
+        minimum: xMin,
+        maximum: xMax,
+        intervalType: _getIntervalType(xMin, xMax),
+        interval: _getInterval(xMin, xMax),
+        majorGridLines: MajorGridLines(color: gridColor),
+        axisLine: AxisLine(color: gridColor),
+        labelStyle: TextStyle(color: labelColor, fontSize: 10),
+        dateFormat: DateFormat(_getDateFormat(xMin, xMax)),
+      ),
+      primaryYAxis: NumericAxis(
+        majorGridLines: MajorGridLines(color: gridColor),
+        axisLine: AxisLine(color: gridColor),
+        labelStyle: TextStyle(color: labelColor, fontSize: 10),
+        minimum: 0,
+        maximum: maxL < 100 ? 100 : maxL * 1.1,
+      ),
+      series: <CartesianSeries<HistoricalReading, DateTime>>[
+        if (_showLightIntensity && !isSinglePoint) SplineAreaSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.lightIntensity ?? 0, name: 'Cahaya', color: const Color(0xFFFFE66D).withValues(alpha: 0.3), borderColor: const Color(0xFFFFE66D), borderWidth: 2),
+        if (_showLightIntensity && isSinglePoint) ScatterSeries<HistoricalReading, DateTime>(dataSource: data, xValueMapper: (r, _) => r.timestamp, yValueMapper: (r, _) => r.lightIntensity ?? 0, name: 'Cahaya', color: const Color(0xFFFFE66D), markerSettings: const MarkerSettings(isVisible: true, width: 12, height: 12)),
       ],
     );
   }
 }
 
-class _TempHumidityChart extends StatelessWidget {
-  const _TempHumidityChart({required this.readings});
+// ============================================================================
+// Helper Classes
+// ============================================================================
 
-  final List<HistoricalReading> readings;
+class LegendItemData {
+  final String label;
+  final Color color;
+  final bool isVisible;
+  final VoidCallback onToggle;
+  const LegendItemData(this.label, this.color, this.isVisible, this.onToggle);
+}
+
+// ============================================================================
+// Reusable Widgets
+// ============================================================================
+
+class PresetChip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  const PresetChip({super.key, required this.label, required this.isSelected, required this.onTap, this.icon});
 
   @override
   Widget build(BuildContext context) {
-    // Take last 20 readings for chart (reversed to show chronological order)
-    final chartData = readings.take(20).toList().reversed.toList();
-
-    if (chartData.isEmpty) {
-      return const SizedBox(
-        height: 300,
-        child: Center(child: Text('Tidak ada data')),
-      );
-    }
-
-    final tempSpots = <FlSpot>[];
-    final humiditySpots = <FlSpot>[];
-
-    for (int i = 0; i < chartData.length; i++) {
-      final reading = chartData[i];
-      if (reading.temperature != null) {
-        tempSpots.add(FlSpot(i.toDouble(), reading.temperature!));
-      }
-      if (reading.humidity != null) {
-        humiditySpots.add(FlSpot(i.toDouble(), reading.humidity!));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.surface,
-            Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SizedBox(
-          height: 300,
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: true,
-                horizontalInterval: 10,
-                verticalInterval: 1,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: Colors.grey.withValues(alpha: 0.2),
-                    strokeWidth: 1,
-                  );
-                },
-                getDrawingVerticalLine: (value) {
-                  return FlLine(
-                    color: Colors.grey.withValues(alpha: 0.2),
-                    strokeWidth: 1,
-                  );
-                },
-              ),
-              titlesData: FlTitlesData(
-                show: true,
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    interval: 1,
-                    getTitlesWidget: (double value, TitleMeta meta) {
-                      final index = value.toInt();
-                      if (index < 0 || index >= chartData.length) {
-                        return const Text('');
-                      }
-                      final time = DateFormat('HH:mm').format(chartData[index].timestamp);
-                      return SideTitleWidget(
-                        axisSide: meta.axisSide,
-                        child: Text(
-                          time,
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    interval: 20,
-                    getTitlesWidget: (double value, TitleMeta meta) {
-                      return Text(
-                        value.toInt().toString(),
-                        style: const TextStyle(fontSize: 10),
-                      );
-                    },
-                    reservedSize: 42,
-                  ),
-                ),
-              ),
-              borderData: FlBorderData(
-                show: true,
-                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-              ),
-              minX: 0,
-              maxX: (chartData.length - 1).toDouble(),
-              minY: 0,
-              maxY: 100,
-              lineBarsData: [
-                // Temperature line
-                if (tempSpots.isNotEmpty)
-                  LineChartBarData(
-                    spots: tempSpots,
-                    isCurved: true,
-                    color: const Color(0xFFFF6B6B),
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFFFF6B6B).withValues(alpha: 0.1),
-                    ),
-                  ),
-                // Humidity line
-                if (humiditySpots.isNotEmpty)
-                  LineChartBarData(
-                    spots: humiditySpots,
-                    isCurved: true,
-                    color: const Color(0xFF4ECDC4),
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFF4ECDC4).withValues(alpha: 0.1),
-                    ),
-                  ),
-              ],
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                    return touchedBarSpots.map((barSpot) {
-                      final flSpot = barSpot;
-                      final index = flSpot.x.toInt();
-                      if (index < 0 || index >= chartData.length) {
-                        return null;
-                      }
-                      final time = DateFormat('HH:mm').format(chartData[index].timestamp);
-                      final value = flSpot.y.toStringAsFixed(1);
-                      final label = barSpot.barIndex == 0 ? 'Suhu' : 'Kelembaban';
-                      return LineTooltipItem(
-                        '$label: $value\n$time',
-                        const TextStyle(color: Colors.white),
-                      );
-                    }).toList();
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SoilMoistureChart extends StatelessWidget {
-  const _SoilMoistureChart({required this.readings});
-
-  final List<HistoricalReading> readings;
-
-  @override
-  Widget build(BuildContext context) {
-    final chartData = readings.take(20).toList().reversed.toList();
-
-    if (chartData.isEmpty) {
-      return const SizedBox(
-        height: 300,
-        child: Center(child: Text('Tidak ada data')),
-      );
-    }
-
-    final soilSpots = <FlSpot>[];
-
-    for (int i = 0; i < chartData.length; i++) {
-      final reading = chartData[i];
-      if (reading.soilMoisturePercent != null) {
-        soilSpots.add(FlSpot(i.toDouble(), reading.soilMoisturePercent!));
-      }
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.surface,
-            Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: SizedBox(
-          height: 300,
-          child: LineChart(
-            LineChartData(
-              gridData: FlGridData(
-                show: true,
-                drawVerticalLine: true,
-                horizontalInterval: 20,
-                verticalInterval: 1,
-                getDrawingHorizontalLine: (value) {
-                  return FlLine(
-                    color: Colors.grey.withValues(alpha: 0.2),
-                    strokeWidth: 1,
-                  );
-                },
-                getDrawingVerticalLine: (value) {
-                  return FlLine(
-                    color: Colors.grey.withValues(alpha: 0.2),
-                    strokeWidth: 1,
-                  );
-                },
-              ),
-              titlesData: FlTitlesData(
-                show: true,
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 30,
-                    interval: 1,
-                    getTitlesWidget: (double value, TitleMeta meta) {
-                      final index = value.toInt();
-                      if (index < 0 || index >= chartData.length) {
-                        return const Text('');
-                      }
-                      final time = DateFormat('HH:mm').format(chartData[index].timestamp);
-                      return SideTitleWidget(
-                        axisSide: meta.axisSide,
-                        child: Text(
-                          time,
-                          style: const TextStyle(fontSize: 10),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    interval: 20,
-                    getTitlesWidget: (double value, TitleMeta meta) {
-                      return Text(
-                        '${value.toInt()}%',
-                        style: const TextStyle(fontSize: 10),
-                      );
-                    },
-                    reservedSize: 42,
-                  ),
-                ),
-              ),
-              borderData: FlBorderData(
-                show: true,
-                border: Border.all(color: Colors.grey.withValues(alpha: 0.2)),
-              ),
-              minX: 0,
-              maxX: (chartData.length - 1).toDouble(),
-              minY: 0,
-              maxY: 100,
-              lineBarsData: [
-                if (soilSpots.isNotEmpty)
-                  LineChartBarData(
-                    spots: soilSpots,
-                    isCurved: true,
-                    color: const Color(0xFF95E1D3),
-                    barWidth: 3,
-                    isStrokeCapRound: true,
-                    dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: const Color(0xFF95E1D3).withValues(alpha: 0.2),
-                    ),
-                  ),
-              ],
-              lineTouchData: LineTouchData(
-                enabled: true,
-                touchTooltipData: LineTouchTooltipData(
-                  getTooltipItems: (List<LineBarSpot> touchedBarSpots) {
-                    return touchedBarSpots.map((barSpot) {
-                      final flSpot = barSpot;
-                      final index = flSpot.x.toInt();
-                      if (index < 0 || index >= chartData.length) {
-                        return null;
-                      }
-                      final time = DateFormat('HH:mm').format(chartData[index].timestamp);
-                      final value = flSpot.y.toStringAsFixed(1);
-                      return LineTooltipItem(
-                        'Tanah: $value%\n$time',
-                        const TextStyle(color: Colors.white),
-                      );
-                    }).toList();
-                  },
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _HistoricalTable extends StatelessWidget {
-  const _HistoricalTable({required this.readings});
-
-  final List<HistoricalReading> readings;
-
-  @override
-  Widget build(BuildContext context) {
-    // Show last 50 readings
-    final displayReadings = readings.take(50).toList();
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: DataTable(
-                headingRowColor: WidgetStateProperty.all(
-                  Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.5),
-                ),
-                headingTextStyle: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                dataTextStyle: Theme.of(context).textTheme.bodyMedium,
-                columns: const [
-                  DataColumn(label: Text('Waktu')),
-                  DataColumn(label: Text('Suhu (°C)')),
-                  DataColumn(label: Text('Kelembaban (%)')),
-                  DataColumn(label: Text('Tanah (%)')),
-                  DataColumn(label: Text('Cahaya (%)')),
-                ],
-                rows: displayReadings.map((reading) {
-                  return DataRow(cells: [
-                    DataCell(Text(
-                      DateFormat('dd/MM HH:mm').format(reading.timestamp),
-                      style: const TextStyle(fontWeight: FontWeight.w500),
-                    )),
-                    DataCell(Text(
-                      reading.temperature?.toStringAsFixed(1) ?? '-',
-                    )),
-                    DataCell(Text(
-                      reading.humidity?.toStringAsFixed(1) ?? '-',
-                    )),
-                    DataCell(Text(
-                      reading.soilMoisturePercent?.toStringAsFixed(1) ?? '-',
-                    )),
-                    DataCell(Text(
-                      reading.lightIntensity?.toStringAsFixed(0) ?? '-',
-                    )),
-                  ]);
-                }).toList(),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _EmptyStateWidget extends ConsumerWidget {
-  const _EmptyStateWidget({required this.selectedDate});
-
-  final DateTime selectedDate;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final formattedDate = DateFormat('dd MMMM yyyy', 'id_ID').format(selectedDate);
-    final isToday = DateFormat('yyyy-MM-dd').format(selectedDate) == 
-                    DateFormat('yyyy-MM-dd').format(DateTime.now());
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     
-    // Make scrollable agar RefreshIndicator bisa triggered
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.calendar_today_outlined,
-                size: 80,
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                isToday ? 'Belum Ada Data Hari Ini' : 'Tidak Ada Data',
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Tidak ada data sensor untuk tanggal\n$formattedDate',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
-                    ),
-              ),
-              const SizedBox(height: 24),
-              if (isToday)
-                Text(
-                  '⬇️ Tarik ke bawah untuk refresh',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                )
-              else ...[
-                // Tombol untuk pilih tanggal lain
-                FilledButton.icon(
-                  onPressed: () => MonitoringScreen.showMonitoringDatePicker(context, ref),
-                  icon: const Icon(Icons.calendar_month_rounded),
-                  label: const Text('Pilih Tanggal Lain'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextButton.icon(
-                  onPressed: () {
-                    ref.read(selectedMonitoringDateProvider.notifier).state = DateTime.now();
-                  },
-                  icon: const Icon(Icons.today_rounded),
-                  label: const Text('Kembali ke Hari Ini'),
-                ),
-              ],
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? colorScheme.primary : colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? colorScheme.primary : colorScheme.outlineVariant),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 16, color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant),
+              const SizedBox(width: 6),
             ],
-          ),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? colorScheme.onPrimary : colorScheme.onSurfaceVariant,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 13,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _ErrorStateWidget extends StatelessWidget {
-  const _ErrorStateWidget({required this.error, required this.onRetry});
+class ChartCard extends StatelessWidget {
+  final String title;
+  final List<LegendItemData> legendItems;
+  final Widget chart;
+  final VoidCallback onResetZoom;
 
-  final Object error;
-  final VoidCallback onRetry;
+  const ChartCard({super.key, required this.title, required this.legendItems, required this.chart, required this.onResetZoom});
 
   @override
   Widget build(BuildContext context) {
-    // Make scrollable agar RefreshIndicator bisa triggered
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.3),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.cloud_off_outlined,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.error,
+                Expanded(
+                  child: Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                   ),
                 ),
-                const SizedBox(height: 24),
-                Text(
-                  'Gagal Memuat Data',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w600,
-                      ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  error.toString(),
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: onRetry,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Coba Lagi'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  ),
+                IconButton(
+                  icon: Icon(Icons.zoom_out_map, color: colorScheme.onSurfaceVariant, size: 20),
+                  onPressed: onResetZoom,
+                  tooltip: 'Reset Zoom',
+                  constraints: const BoxConstraints(),
+                  padding: const EdgeInsets.all(8),
                 ),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ShimmerLoadingState extends StatefulWidget {
-  const _ShimmerLoadingState();
-
-  @override
-  State<_ShimmerLoadingState> createState() => _ShimmerLoadingStateState();
-}
-
-class _ShimmerLoadingStateState extends State<_ShimmerLoadingState>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    )..repeat();
-    _animation = Tween<double>(begin: -2, end: 2).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
-    );
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Shimmer summary cards
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 800;
-              final shimmerCards = List.generate(4, (index) => _ShimmerCard(animation: _animation));
-              
-              if (isWide) {
-                return Row(
-                  children: shimmerCards
-                      .map((card) => Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.only(right: 16),
-                              child: card,
-                            ),
-                          ))
-                      .toList(),
-                );
-              }
-              
-              return Column(
-                children: shimmerCards
-                    .map((card) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: card,
-                        ))
-                    .toList(),
-              );
-            },
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Wrap(spacing: 16, runSpacing: 8, children: legendItems.map((item) => LegendItem(item: item)).toList()),
           ),
-          const SizedBox(height: 32),
-          _ShimmerCard(animation: _animation, height: 300),
-          const SizedBox(height: 24),
-          _ShimmerCard(animation: _animation, height: 300),
+          SizedBox(height: 250, child: Padding(padding: const EdgeInsets.all(8), child: chart)),
         ],
       ),
     );
   }
 }
 
-class _ShimmerCard extends StatelessWidget {
-  const _ShimmerCard({required this.animation, this.height = 120});
-
-  final Animation<double> animation;
-  final double height;
+class LegendItem extends StatelessWidget {
+  final LegendItemData item;
+  const LegendItem({super.key, required this.item});
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: animation,
-      builder: (context, child) {
-        return Container(
-          height: height,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [
-                Theme.of(context).colorScheme.surfaceContainerHighest,
-                Theme.of(context).colorScheme.surfaceContainerHigh,
-                Theme.of(context).colorScheme.surfaceContainerHighest,
-              ],
-              stops: [
-                (animation.value - 1).clamp(0.0, 1.0),
-                animation.value.clamp(0.0, 1.0),
-                (animation.value + 1).clamp(0.0, 1.0),
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return GestureDetector(
+      onTap: item.onToggle,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(
+              color: item.isVisible ? item.color : Colors.transparent,
+              border: Border.all(color: item.color, width: 2),
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            item.label,
+            style: TextStyle(
+              color: item.isVisible ? colorScheme.onSurfaceVariant : colorScheme.outline,
+              fontSize: 12,
+              decoration: item.isVisible ? null : TextDecoration.lineThrough,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class HistoricalDataTable extends StatelessWidget {
+  final List<HistoricalReading> readings;
+  const HistoricalDataTable({super.key, required this.readings});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final tableData = readings.length > 100 ? readings.sublist(0, 100) : readings;
+    
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Text(
+                  'Data Historis',
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const Spacer(),
+                Text(
+                  '${tableData.length} dari ${readings.length} data',
+                  style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                ),
               ],
             ),
           ),
-        );
-      },
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor: WidgetStateProperty.all(colorScheme.surfaceContainerHighest),
+              dataRowColor: WidgetStateProperty.all(Colors.transparent),
+              headingTextStyle: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
+              dataTextStyle: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+              columns: const [
+                DataColumn(label: Text('Waktu')),
+                DataColumn(label: Text('Suhu (°C)')),
+                DataColumn(label: Text('Kelembaban (%)')),
+                DataColumn(label: Text('Tanah (%)')),
+                DataColumn(label: Text('Cahaya (lux)')),
+              ],
+              rows: tableData.map((r) => DataRow(cells: [
+                DataCell(Text(DateFormat('dd/MM/yy HH:mm').format(r.timestamp))),
+                DataCell(Text((r.temperature ?? 0).toStringAsFixed(1))),
+                DataCell(Text((r.humidity ?? 0).toStringAsFixed(1))),
+                DataCell(Text((r.soilMoisturePercent ?? 0).toStringAsFixed(1))),
+                DataCell(Text((r.lightIntensity ?? 0).toStringAsFixed(0))),
+              ])).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ShimmerLoading extends StatelessWidget {
+  final bool isDark;
+  const ShimmerLoading({super.key, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final baseColor = isDark ? const Color(0xFF2B2D30) : Colors.grey.shade300;
+    final highlightColor = isDark ? const Color(0xFF3C3E42) : Colors.grey.shade100;
+    
+    return Shimmer.fromColors(
+      baseColor: baseColor,
+      highlightColor: highlightColor,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Container(height: 350, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+          const SizedBox(height: 16),
+          Container(height: 350, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+          const SizedBox(height: 16),
+          Container(height: 350, decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16))),
+        ],
+      ),
+    );
+  }
+}
+
+class EmptyState extends StatelessWidget {
+  final bool isDark;
+  const EmptyState({super.key, required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.show_chart_outlined, size: 80, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.3)),
+          const SizedBox(height: 16),
+          Text(
+            'Belum Ada Data',
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Data sensor akan muncul di sini\nsetelah device terhubung',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class ErrorState extends StatelessWidget {
+  final String error;
+  final VoidCallback onRetry;
+  const ErrorState({super.key, required this.error, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+            const SizedBox(height: 16),
+            Text(
+              'Terjadi Kesalahan',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              error,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Coba Lagi'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

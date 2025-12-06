@@ -43,32 +43,19 @@ class StrawberryGuidanceSection extends ConsumerWidget {
         children: [
           // Header
           _buildHeader(context, theme),
-          // Divider
-          Container(
-            height: 1,
-            margin: const EdgeInsets.symmetric(horizontal: 20),
-            color: theme.colorScheme.outline.withAlpha((255 * 0.1).round()),
-          ),
-          // Recommendations
+          // Recommendations - no divider, with spacing
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
             child: Column(
               children: [
                 ...topRecommendations.asMap().entries.map((entry) {
                   final index = entry.key;
                   final item = entry.value;
-                  return Column(
-                    children: [
-                      _GuidanceItem(item: item, index: index + 1),
-                      if (index < topRecommendations.length - 1)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 10),
-                          child: Container(
-                            height: 1,
-                            color: theme.colorScheme.outline.withAlpha((255 * 0.08).round()),
-                          ),
-                        ),
-                    ],
+                  return Padding(
+                    padding: EdgeInsets.only(
+                      bottom: index < topRecommendations.length - 1 ? 10 : 0,
+                    ),
+                    child: _GuidanceItem(item: item, index: index + 1),
                   );
                 }),
               ],
@@ -208,24 +195,35 @@ class _GuidanceItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colors = _getColors();
+    final bgColor = _getBackgroundColor();
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Icon with colored background
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: colors.background,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            _getIcon(),
-            size: 20,
-            color: colors.primary,
-          ),
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: _getPriorityColor().withAlpha((255 * 0.3).round()),
+          width: 1,
         ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Icon with colored background
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: colors.primary.withAlpha((255 * 0.15).round()),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              _getIcon(),
+              size: 20,
+              color: colors.primary,
+            ),
+          ),
         const SizedBox(width: 12),
         // Content
         Expanded(
@@ -267,7 +265,19 @@ class _GuidanceItem extends StatelessWidget {
           ),
         ),
       ],
+    ),
     );
+  }
+
+  /// Background color based on priority/condition
+  Color _getBackgroundColor() {
+    if (item.isCritical) {
+      return const Color(0xFFEF5350).withAlpha((255 * 0.08).round());
+    }
+    if (item.isWarning) {
+      return const Color(0xFFFFB74D).withAlpha((255 * 0.08).round());
+    }
+    return const Color(0xFF66BB6A).withAlpha((255 * 0.08).round());
   }
 
   Color _getPriorityColor() {

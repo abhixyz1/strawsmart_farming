@@ -354,33 +354,3 @@ class _ForgotPasswordEmailPageState
     );
   }
 }
-
-class _StrawberryPatternPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.05)
-      ..style = PaintingStyle.fill;
-
-    // Draw decorative circles pattern
-    for (var i = 0; i < 15; i++) {
-      final x = (i * size.width / 6) % size.width;
-      final y = (i * size.height / 8) % size.height;
-      canvas.drawCircle(Offset(x, y), 30, paint);
-    }
-
-    // Draw strawberry dots pattern
-    final dotPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08)
-      ..style = PaintingStyle.fill;
-
-    for (var i = 0; i < 40; i++) {
-      final x = (i * 73 + 20) % size.width;
-      final y = (i * 97 + 40) % size.height;
-      canvas.drawCircle(Offset(x.toDouble(), y.toDouble()), 8, dotPaint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(CustomPainter oldDelegate) => false;
-}

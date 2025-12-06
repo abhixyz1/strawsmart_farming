@@ -1970,7 +1970,7 @@ class _AddJournalSheetState extends ConsumerState<_AddJournalSheet> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<JournalEntryType>(
-                value: _selectedType,
+                initialValue: _selectedType,
                 decoration: const InputDecoration(
                   labelText: 'Tipe Aktivitas',
                   border: OutlineInputBorder(),
