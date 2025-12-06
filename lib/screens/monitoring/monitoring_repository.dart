@@ -1,13 +1,99 @@
+import 'dart:math' as math;
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../dashboard/dashboard_repository.dart';
 
-/// Provider untuk tanggal yang dipilih di halaman Monitoring
+/// Range preset untuk monitoring chart
+enum MonitoringRangePreset {
+  oneDay('1D', Duration(days: 1)),
+  sevenDays('7D', Duration(days: 7)),
+  thirtyDays('30D', Duration(days: 30)),
+  ninetyDays('90D', Duration(days: 90)),
+  all('All', Duration(days: 365 * 10)); // 10 years as "all"
+
+  const MonitoringRangePreset(this.label, this.duration);
+  final String label;
+  final Duration duration;
+}
+
+/// State class untuk monitoring date range
+class MonitoringDateRange {
+  const MonitoringDateRange({
+    required this.startDate,
+    required this.endDate,
+    required this.preset,
+  });
+
+  final DateTime startDate;
+  final DateTime endDate;
+  final MonitoringRangePreset? preset; // null if custom range
+
+  /// Factory untuk membuat range dari preset
+  factory MonitoringDateRange.fromPreset(MonitoringRangePreset preset) {
+    final now = DateTime.now();
+    final endDate = DateTime(now.year, now.month, now.day, 23, 59, 59);
+    final startDate = DateTime(now.year, now.month, now.day).subtract(preset.duration).add(const Duration(days: 1));
+    return MonitoringDateRange(
+      startDate: startDate,
+      endDate: endDate,
+      preset: preset,
+    );
+  }
+
+  /// Factory untuk custom range
+  factory MonitoringDateRange.custom(DateTime start, DateTime end) {
+    return MonitoringDateRange(
+      startDate: DateTime(start.year, start.month, start.day),
+      endDate: DateTime(end.year, end.month, end.day, 23, 59, 59),
+      preset: null,
+    );
+  }
+
+  /// Copy with new values
+  MonitoringDateRange copyWith({
+    DateTime? startDate,
+    DateTime? endDate,
+    MonitoringRangePreset? preset,
+  }) {
+    return MonitoringDateRange(
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      preset: preset,
+    );
+  }
+  
+  /// Get duration in days
+  int get durationDays => endDate.difference(startDate).inDays + 1;
+}
+
+/// Provider untuk tanggal yang dipilih di halaman Monitoring (legacy - keep for compatibility)
 /// Default: hari ini
 final selectedMonitoringDateProvider = StateProvider<DateTime>((ref) {
   return DateTime.now();
 });
+
+/// Provider untuk date range di halaman Monitoring
+/// Default: 1 Day preset
+final monitoringDateRangeProvider = StateNotifierProvider<MonitoringDateRangeNotifier, MonitoringDateRange>((ref) {
+  return MonitoringDateRangeNotifier();
+});
+
+class MonitoringDateRangeNotifier extends StateNotifier<MonitoringDateRange> {
+  MonitoringDateRangeNotifier() : super(MonitoringDateRange.fromPreset(MonitoringRangePreset.oneDay));
+
+  void setPreset(MonitoringRangePreset preset) {
+    state = MonitoringDateRange.fromPreset(preset);
+  }
+
+  void setCustomRange(DateTime start, DateTime end) {
+    state = MonitoringDateRange.custom(start, end);
+  }
+
+  void reset() {
+    state = MonitoringDateRange.fromPreset(MonitoringRangePreset.oneDay);
+  }
+}
 
 /// Monitoring repository menggunakan deviceId yang sama dengan dashboard
 final monitoringRepositoryProvider = Provider<MonitoringRepository>((ref) {
@@ -16,10 +102,19 @@ final monitoringRepositoryProvider = Provider<MonitoringRepository>((ref) {
   return MonitoringRepository(database, deviceId: deviceId);
 });
 
-/// Provider untuk historical readings yang sudah difilter berdasarkan tanggal terpilih
+/// Provider untuk historical readings yang sudah difilter berdasarkan tanggal terpilih (legacy)
 final historicalReadingsProvider = StreamProvider<List<HistoricalReading>>((ref) {
   final selectedDate = ref.watch(selectedMonitoringDateProvider);
   return ref.watch(monitoringRepositoryProvider).watchHistoricalReadingsByDate(selectedDate);
+});
+
+/// Provider untuk historical readings berdasarkan date range
+final historicalReadingsByRangeProvider = StreamProvider<List<HistoricalReading>>((ref) {
+  final dateRange = ref.watch(monitoringDateRangeProvider);
+  return ref.watch(monitoringRepositoryProvider).watchHistoricalReadingsByRange(
+    dateRange.startDate,
+    dateRange.endDate,
+  );
 });
 
 class MonitoringRepository {
@@ -83,6 +178,36 @@ class MonitoringRepository {
 
       // Sort by timestamp descending (newest first)
       readings.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      return readings;
+    });
+  }
+
+  /// Watch historical sensor readings for date range.
+  Stream<List<HistoricalReading>> watchHistoricalReadingsByRange(DateTime startDate, DateTime endDate) {
+    final startTimestamp = startDate.millisecondsSinceEpoch ~/ 1000;
+    final endTimestamp = endDate.millisecondsSinceEpoch ~/ 1000;
+    
+    return _deviceRef
+        .child('readings')
+        .orderByKey()
+        .startAt(startTimestamp.toString())
+        .endAt(endTimestamp.toString())
+        .onValue
+        .map((event) {
+      final data = event.snapshot.value;
+      if (data == null) {
+        return <HistoricalReading>[];
+      }
+
+      final List<HistoricalReading> readings = [];
+
+      if (data is Map) {
+        _parseReadingsMap(data, readings);
+      }
+
+      // Sort by timestamp ascending (oldest first for charts)
+      readings.sort((a, b) => a.timestamp.compareTo(b.timestamp));
 
       return readings;
     });
@@ -323,4 +448,86 @@ int? _asInt(Object? value) {
 
 Map<String, dynamic> _castToStringDynamicMap(Map value) {
   return value.map((key, value) => MapEntry(key.toString(), value));
+}
+
+/// Largest Triangle Three Buckets (LTTB) downsampling algorithm
+/// Preserves visual shape while reducing data points for chart performance
+class LTTBDownsampler {
+  /// Downsample readings using LTTB algorithm
+  static List<HistoricalReading> downsample(List<HistoricalReading> data, int threshold) {
+    if (data.length <= threshold) return data;
+    if (threshold <= 2) return [data.first, data.last];
+
+    final sampled = <HistoricalReading>[];
+    
+    // Always add the first point
+    sampled.add(data.first);
+
+    // Bucket size (excluding first and last)
+    final bucketSize = (data.length - 2) / (threshold - 2);
+
+    int a = 0; // Initially, the first point
+
+    for (int i = 0; i < threshold - 2; i++) {
+      // Calculate bucket boundaries
+      final avgRangeStart = ((i + 1) * bucketSize).floor() + 1;
+      final avgRangeEnd = ((i + 2) * bucketSize).floor() + 1;
+      final actualEnd = math.min(avgRangeEnd, data.length);
+
+      // Calculate average point for the next bucket
+      double avgX = 0;
+      double avgY = 0;
+      int avgCount = 0;
+
+      for (int j = avgRangeStart; j < actualEnd; j++) {
+        avgX += data[j].timestamp.millisecondsSinceEpoch.toDouble();
+        avgY += _getPrimaryMetric(data[j]);
+        avgCount++;
+      }
+      
+      if (avgCount > 0) {
+        avgX /= avgCount;
+        avgY /= avgCount;
+      }
+
+      // Calculate bucket range for current bucket
+      final rangeStart = ((i) * bucketSize).floor() + 1;
+      final rangeEnd = math.min(((i + 1) * bucketSize).floor() + 1, data.length);
+
+      // Find point with largest triangle area
+      double maxArea = -1;
+      int maxAreaIndex = rangeStart;
+
+      final pointAX = data[a].timestamp.millisecondsSinceEpoch.toDouble();
+      final pointAY = _getPrimaryMetric(data[a]);
+
+      for (int j = rangeStart; j < rangeEnd; j++) {
+        final pointBX = data[j].timestamp.millisecondsSinceEpoch.toDouble();
+        final pointBY = _getPrimaryMetric(data[j]);
+
+        // Calculate triangle area using cross product
+        final area = ((pointAX - avgX) * (pointBY - pointAY) -
+                     (pointAX - pointBX) * (avgY - pointAY)).abs() *
+                    0.5;
+
+        if (area > maxArea) {
+          maxArea = area;
+          maxAreaIndex = j;
+        }
+      }
+
+      sampled.add(data[maxAreaIndex]);
+      a = maxAreaIndex; // Move to the selected point
+    }
+
+    // Always add the last point
+    sampled.add(data.last);
+
+    return sampled;
+  }
+
+  /// Get primary metric value for LTTB calculation (use temperature as primary)
+  static double _getPrimaryMetric(HistoricalReading reading) {
+    return reading.temperature ?? 0;
+  }
 }
