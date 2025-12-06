@@ -242,8 +242,9 @@ class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = ref.watch(themeModeProvider);
-    final isDarkMode = themeMode == ThemeMode.dark;
+    final themeNotifier = ref.watch(themeModeProvider.notifier);
+    // Use isDarkMode which considers system theme when in ThemeMode.system
+    final isDarkMode = themeNotifier.isDarkMode(context);
     
     return _SettingsCard(
       title: 'Preferensi',
@@ -267,7 +268,10 @@ class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
           trailing: Switch(
             value: isDarkMode,
             onChanged: (value) {
-              ref.read(themeModeProvider.notifier).toggleDarkMode();
+              // Explicitly set to dark or light based on switch value
+              ref.read(themeModeProvider.notifier).setThemeMode(
+                value ? ThemeMode.dark : ThemeMode.light,
+              );
             },
           ),
         ),

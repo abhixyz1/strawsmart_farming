@@ -10,10 +10,13 @@ import '../batch/batch_management_screen.dart';
 import '../logs/logs_screen.dart';
 import '../../core/widgets/app_shell.dart';
 import '../../core/services/schedule_executor_service.dart';
+import '../../core/services/anomaly_detection_service.dart';
+import '../batch/batch_repository.dart';
 import 'dashboard_repository.dart';
 import 'widgets/dashboard_app_bar.dart';
 import 'widgets/greenhouse_condition_card.dart';
 import 'widgets/pump_control_card.dart';
+import 'widgets/schedule_info_card.dart';
 import 'widgets/common_widgets.dart';
 import 'widgets/strawberry_guidance_section.dart';
 
@@ -44,6 +47,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _pumpToggleCount = 0;
   static const _pumpToggleThreshold = 5; // Max toggles allowed
   static const _pumpToggleCooldown = Duration(seconds: 15); // Reset window
+
+  // Throttling untuk anomaly detection agar tidak check terlalu sering
+  DateTime? _lastAnomalyCheck;
+  static const _anomalyCheckInterval = Duration(seconds: 30); // Check setiap 30 detik (sesuai sensor update)
 
   // ---------------------------------------------------------------------------
   // Konstanta navigasi
@@ -89,6 +96,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Aktivasi schedule executor service
     ref.watch(scheduleExecutorServiceProvider);
+    
+    // Monitor anomali sensor dan trigger notifikasi
+    _monitorSensorAnomalies(latestAsync, statusAsync);
 
     return AppShell(
       destinations: _destinations,
@@ -171,7 +181,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const StrawberryGuidanceSection(),
             const SizedBox(height: 24),
 
-            // Section pompa (tanpa header)
+            // Section jadwal penyiraman (dibawah guidance)
+            const ScheduleInfoCard(),
+            const SizedBox(height: 24),
+
+            // Section pompa control
             _buildPumpSection(statusAsync, pumpAsync, controlModeAsync),
           ],
         ),
@@ -237,6 +251,61 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       onModeChange: _setControlMode,
       onRefresh: _refreshRealtimeFeeds,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Anomaly Detection Monitoring
+  // ---------------------------------------------------------------------------
+  void _monitorSensorAnomalies(
+    AsyncValue<SensorSnapshot?> latestAsync,
+    AsyncValue<DeviceStatusData?> statusAsync,
+  ) {
+    // Throttling: hanya check setiap 5 menit
+    final now = DateTime.now();
+    if (_lastAnomalyCheck != null) {
+      final timeSinceLastCheck = now.difference(_lastAnomalyCheck!);
+      if (timeSinceLastCheck < _anomalyCheckInterval) {
+        return; // Skip check jika belum 5 menit
+      }
+    }
+
+    // Only monitor when data is available
+    if (latestAsync.valueOrNull == null || statusAsync.valueOrNull == null) {
+      return;
+    }
+
+    // Update last check time
+    _lastAnomalyCheck = now;
+
+    final sensorData = latestAsync.value!;
+    final status = statusAsync.value!;
+    final deviceId = ref.read(dashboardDeviceIdProvider);
+    final deviceName = 'Greenhouse $deviceId';
+    final activeBatch = ref.read(activeBatchProvider).valueOrNull;
+
+    // Get anomaly detection service
+    final anomalyService = ref.read(anomalyDetectionServiceProvider);
+
+    // Check sensor readings untuk anomali
+    Future.microtask(() async {
+      await anomalyService.checkSensorReadings(
+        deviceId: deviceId,
+        deviceName: deviceName,
+        temperature: sensorData.temperature,
+        humidity: sensorData.humidity,
+        soilMoisture: sensorData.soilMoisturePercent,
+        soilPh: null, // pH sensor not yet implemented
+        currentPhase: activeBatch?.currentPhase,
+        phaseRequirements: activeBatch?.currentRequirements,
+      );
+
+      // Check device online status
+      await anomalyService.checkDeviceStatus(
+        deviceId: deviceId,
+        deviceName: deviceName,
+        isOnline: status.online,
+      );
+    });
   }
 
   // ---------------------------------------------------------------------------

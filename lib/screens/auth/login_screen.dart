@@ -62,26 +62,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         .read(authControllerProvider.notifier)
         .signIn(_emailC.text.trim(), _passC.text);
 
+    if (!mounted) return;
+
     final state = ref.read(authControllerProvider);
 
     if (state.hasValue && state.value != null) {
+      setState(() => _loginSuccess = true);
+
+      // Delay navigation to show success animation
+      await Future.delayed(const Duration(milliseconds: 600));
+
       if (mounted) {
-        setState(() => _loginSuccess = true);
-
-        // Delay navigation to show success animation
-        await Future.delayed(const Duration(milliseconds: 600));
-
-        if (mounted) {
-          context.go('/dashboard');
-        }
+        context.go('/dashboard');
       }
     } else if (state.hasError) {
-      if (mounted) {
-        setState(() {
-          _currentError = state.error.toString();
-          _loginSuccess = false;
-        });
-      }
+      setState(() {
+        _currentError = state.error.toString();
+        _loginSuccess = false;
+      });
     }
   }
 

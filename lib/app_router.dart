@@ -12,12 +12,17 @@ import 'screens/report/report_screen.dart';
 import 'screens/batch/batch_management_screen.dart';
 import 'screens/batch/batch_detail_screen.dart';
 import 'screens/batch/create_batch_screen.dart';
+import 'screens/notifications/notification_screen.dart';
 import 'core/utils/page_transitions.dart';
+
+// Global key for root navigator
+final _rootNavigatorKey = GlobalKey<NavigatorState>();
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final auth = ref.watch(authStateProvider);
 
   return GoRouter(
+    navigatorKey: _rootNavigatorKey,
     initialLocation: '/',
     refreshListenable: GoRouterRefreshStream(
       ref.read(authRepositoryProvider).authStateChanges,
@@ -47,6 +52,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         pageBuilder: (context, state) => buildSlideTransitionPage(
           state: state,
           child: const DashboardScreen(),
+        ),
+      ),
+      GoRoute(
+        path: '/notifications',
+        name: 'notifications',
+        parentNavigatorKey: _rootNavigatorKey,
+        pageBuilder: (context, state) => buildSlideTransitionPage(
+          state: state,
+          child: const NotificationScreen(),
         ),
       ),
       GoRoute(

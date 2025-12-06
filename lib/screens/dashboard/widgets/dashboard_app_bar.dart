@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../core/services/notification_repository.dart';
 import '../../greenhouse/greenhouse_repository.dart';
 
 /// App bar untuk dashboard dengan selector greenhouse
@@ -93,15 +95,8 @@ class DashboardAppBar extends ConsumerWidget {
                   ),
                 ),
               ),
-              // Tombol notifikasi
-              IconButton(
-                tooltip: 'Notifikasi',
-                icon: Icon(
-                  Icons.notifications_outlined,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                onPressed: () {},
-              ),
+              // Tombol notifikasi dengan badge
+              _NotificationButton(),
             ],
           ),
         ),
@@ -109,17 +104,17 @@ class DashboardAppBar extends ConsumerWidget {
     );
   }
 
-  /// Header untuk tab Pengaturan - minimalis tanpa selector
+  /// Header untuk tab Pengaturan - dengan notification icon, sama seperti tab lain
   Widget _buildSettingsHeader(BuildContext context, ThemeData theme) {
     return SafeArea(
       bottom: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+        padding: const EdgeInsets.fromLTRB(20, 12, 12, 12),
         decoration: BoxDecoration(
           color: theme.colorScheme.surface,
           border: Border(
             bottom: BorderSide(
-              color: theme.colorScheme.outline.withAlpha((255 * 0.2).round()),
+              color: theme.colorScheme.outline.withAlpha((255 * 0.12).round()),
               width: 1,
             ),
           ),
@@ -135,6 +130,8 @@ class DashboardAppBar extends ConsumerWidget {
                 ),
               ),
             ),
+            // Tombol notifikasi dengan badge
+            const _NotificationButton(),
           ],
         ),
       ),
@@ -215,15 +212,8 @@ class DashboardAppBar extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 8),
-            // Tombol notifikasi di paling kanan
-            IconButton(
-              tooltip: 'Notifikasi',
-              icon: Icon(
-                Icons.notifications_outlined,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              onPressed: () {},
-            ),
+            // Tombol notifikasi dengan badge di paling kanan
+            const _NotificationButton(),
           ],
         ),
       ),
@@ -237,6 +227,68 @@ class DashboardAppBar extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (context) => const _GreenhouseSelectorSheet(),
+    );
+  }
+}
+
+/// Notification button widget with badge count
+class _NotificationButton extends ConsumerWidget {
+  const _NotificationButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final unreadCountAsync = ref.watch(unreadNotificationCountProvider);
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          tooltip: 'Notifikasi',
+          icon: Icon(
+            Icons.notifications_outlined,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          onPressed: () {
+            context.go('/notifications');
+          },
+        ),
+        unreadCountAsync.when(
+          data: (unreadCount) {
+            if (unreadCount == 0) return const SizedBox.shrink();
+            
+            return Positioned(
+              right: 8,
+              top: 8,
+              child: Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.error,
+                  shape: BoxShape.circle,
+                ),
+                constraints: const BoxConstraints(
+                  minWidth: 16,
+                  minHeight: 16,
+                ),
+                child: Center(
+                  child: Text(
+                    unreadCount > 99 ? '99+' : '$unreadCount',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onError,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      height: 1.0,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            );
+          },
+          loading: () => const SizedBox.shrink(),
+          error: (_, __) => const SizedBox.shrink(),
+        ),
+      ],
     );
   }
 }

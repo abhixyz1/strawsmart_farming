@@ -175,6 +175,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
     final isPumpOn = widget.pump.isOn;
     // Use stabilized online status
     final isOnline = _stableOnlineStatus;
+    final isDark = theme.brightness == Brightness.dark;
     
     return Container(
       padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
@@ -182,10 +183,9 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
         gradient: LinearGradient(
           colors: isPumpOn
               ? [const Color(0xFF4CAF50), const Color(0xFF388E3C)]
-              : [
-                  theme.colorScheme.surfaceContainerHighest,
-                  theme.colorScheme.surfaceContainerHigh,
-                ],
+              : isDark
+                  ? [const Color(0xFF3D3232), const Color(0xFF4A3A3A)]
+                  : [const Color(0xFFFFEBEE), const Color(0xFFFFCDD2)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -225,13 +225,19 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                 decoration: BoxDecoration(
                   color: isPumpOn 
                       ? Colors.white.withAlpha((255 * 0.2).round())
-                      : theme.colorScheme.outline.withAlpha((255 * 0.1).round()),
+                      : isDark
+                          ? Colors.white.withAlpha((255 * 0.15).round())
+                          : PumpControlCard._primaryRose.withAlpha((255 * 0.15).round()),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   widget.controlMode == ControlMode.auto ? 'AUTO' : 'MANUAL',
                   style: theme.textTheme.labelSmall?.copyWith(
-                    color: isPumpOn ? Colors.white : theme.colorScheme.onSurfaceVariant,
+                    color: isPumpOn 
+                        ? Colors.white 
+                        : isDark 
+                            ? Colors.white70 
+                            : PumpControlCard._primaryRose,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.5,
                   ),
@@ -247,7 +253,11 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
           Text(
             isPumpOn ? 'Pompa Aktif' : 'Pompa Mati',
             style: theme.textTheme.headlineSmall?.copyWith(
-              color: isPumpOn ? Colors.white : theme.colorScheme.onSurface,
+              color: isPumpOn 
+                  ? Colors.white 
+                  : isDark 
+                      ? Colors.white 
+                      : PumpControlCard._primaryRose,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -256,7 +266,11 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
             Text(
               widget.runtimeLabel!,
               style: theme.textTheme.bodySmall?.copyWith(
-                color: isPumpOn ? Colors.white70 : theme.colorScheme.onSurfaceVariant,
+                color: isPumpOn 
+                    ? Colors.white70 
+                    : isDark 
+                        ? Colors.white70 
+                        : PumpControlCard._primaryRose.withAlpha(180),
               ),
             ),
           ],
@@ -268,8 +282,9 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
   Widget _buildBigPumpButton(BuildContext context, ThemeData theme, 
       bool isPumpOn, bool canToggle, bool isViewOnly) {
     
-    final buttonSize = 100.0;
+    const buttonSize = 100.0;
     final isInteractive = canToggle && !isViewOnly;
+    final isDark = theme.brightness == Brightness.dark;
     
     return GestureDetector(
       onTapDown: isInteractive ? (_) => setState(() => _isPressed = true) : null,
@@ -305,31 +320,34 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                   )
                 : LinearGradient(
                     colors: isInteractive
-                        ? [
-                            PumpControlCard._primaryRose.withAlpha((255 * 0.1).round()),
-                            PumpControlCard._primaryRose.withAlpha((255 * 0.05).round()),
-                          ]
-                        : [
-                            theme.colorScheme.surface,
-                            theme.colorScheme.surfaceContainerLow,
-                          ],
+                        ? isDark
+                            ? [const Color(0xFF5D4545), const Color(0xFF4D3838)]
+                            : [Colors.white, const Color(0xFFFFF5F5)]
+                        : isDark
+                            ? [const Color(0xFF4A4040), const Color(0xFF3D3535)]
+                            : [const Color(0xFFFAF0F0), const Color(0xFFF5E5E5)],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
             border: isInteractive && !isPumpOn
                 ? Border.all(
-                    color: PumpControlCard._primaryRose.withAlpha((255 * 0.5).round()),
-                    width: 2,
+                    color: PumpControlCard._primaryRose.withAlpha((255 * 0.6).round()),
+                    width: 2.5,
                   )
-                : null,
+                : !isPumpOn
+                    ? Border.all(
+                        color: PumpControlCard._primaryRose.withAlpha((255 * 0.25).round()),
+                        width: 1.5,
+                      )
+                    : null,
             boxShadow: [
               BoxShadow(
                 color: isPumpOn
                     ? const Color(0xFF4CAF50).withAlpha((255 * 0.4).round())
                     : isInteractive
-                        ? PumpControlCard._primaryRose.withAlpha((255 * 0.2).round())
-                        : Colors.black.withAlpha((255 * 0.1).round()),
-                blurRadius: isPumpOn ? 24 : 12,
+                        ? PumpControlCard._primaryRose.withAlpha((255 * 0.35).round())
+                        : PumpControlCard._primaryRose.withAlpha((255 * 0.15).round()),
+                blurRadius: isPumpOn ? 24 : 16,
                 offset: const Offset(0, 6),
               ),
             ],
@@ -337,7 +355,7 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // Water drops animation ring
+              // Water drops animation ring when pump is ON
               if (isPumpOn)
                 ...List.generate(3, (index) {
                   return TweenAnimationBuilder<double>(
@@ -361,15 +379,37 @@ class _PumpControlCardState extends ConsumerState<PumpControlCard>
                     },
                   );
                 }),
+              // Subtle ring animation when pump is OFF but interactive
+              if (!isPumpOn && isInteractive)
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.95, end: 1.05),
+                  duration: const Duration(milliseconds: 2000),
+                  curve: Curves.easeInOut,
+                  builder: (context, value, child) {
+                    return Container(
+                      width: buttonSize * value,
+                      height: buttonSize * value,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: PumpControlCard._primaryRose.withAlpha(
+                            (255 * (1.05 - value) * 2).round().clamp(0, 60),
+                          ),
+                          width: 1.5,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               // Icon
               Icon(
                 isPumpOn ? Icons.waves_rounded : Icons.power_settings_new_rounded,
                 size: 40,
                 color: isPumpOn 
                     ? const Color(0xFF4CAF50)
-                    : (canToggle && !isViewOnly)
+                    : isInteractive
                         ? PumpControlCard._primaryRose
-                        : theme.colorScheme.outline,
+                        : PumpControlCard._primaryRose.withAlpha((255 * 0.5).round()),
               ),
             ],
           ),

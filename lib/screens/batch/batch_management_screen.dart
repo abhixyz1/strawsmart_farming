@@ -59,22 +59,20 @@ class BatchManagementScreen extends ConsumerWidget {
       },
       child: CustomScrollView(
         slivers: [
-          // Header dengan info greenhouse
+          // Active Batch Card (langsung tanpa header)
           SliverToBoxAdapter(
-            child: _buildHeader(context, greenhouse),
-          ),
-
-          // Active Batch Card
-          SliverToBoxAdapter(
-            child: activeBatchAsync.when(
-              data: (batch) => batch != null
-                  ? _ActiveBatchCard(batch: batch)
-                  : _NoBatchCard(
-                      greenhouseId: greenhouse.greenhouseId,
-                      canCreate: userRole.canManageBatch,
-                    ),
-              loading: () => const _LoadingCard(),
-              error: (e, _) => _ErrorCard(error: e.toString()),
+            child: Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: activeBatchAsync.when(
+                data: (batch) => batch != null
+                    ? _ActiveBatchCard(batch: batch)
+                    : _NoBatchCard(
+                        greenhouseId: greenhouse.greenhouseId,
+                        canCreate: userRole.canManageBatch,
+                      ),
+                loading: () => const _LoadingCard(),
+                error: (e, _) => _ErrorCard(error: e.toString()),
+              ),
             ),
           ),
 
@@ -170,65 +168,6 @@ class BatchManagementScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 16, color: Colors.grey[600]),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context, dynamic greenhouse) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primaryContainer,
-            Theme.of(context).colorScheme.secondaryContainer,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withAlpha(200),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text('🍓', style: TextStyle(fontSize: 28)),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Manajemen Batch',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                      ),
-                      Text(
-                        greenhouse.greenhouseName ?? 'Greenhouse',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onPrimaryContainer
-                                  .withAlpha(180),
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }

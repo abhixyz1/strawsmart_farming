@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "D:/Project/strawsmart_farming/linux"
+    "cmake.sourceDirectory": "D:/Project/strawsmart_farming/linux",
+    "java.configuration.updateBuildConfiguration": "automatic"
 }

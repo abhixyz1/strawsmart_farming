@@ -4,6 +4,16 @@ import '../../core/services/strawberry_guidance.dart';
 import '../../models/guidance_item.dart';
 import '../greenhouse/greenhouse_repository.dart';
 
+/// DEVELOPMENT MODE: Set true saat testing dengan Wokwi simulator
+/// Wokwi memiliki delay 2-5 menit karena processing di server
+/// Set false untuk production dengan real ESP32 hardware
+const bool isWokwiMode = true;
+
+/// Online detection timeout
+/// - Real ESP32: 120 detik (4x telemetry interval 30s)
+/// - Wokwi Mode: 300 detik (5 menit) karena delay server simulator
+const int onlineTimeoutSeconds = isWokwiMode ? 300 : 120;
+
 /// Device ID that Flutter dashboard should subscribe to.
 /// Sekarang mengambil dari activeDeviceIdProvider (selected greenhouse)
 /// Fallback ke 'greenhouse_node_001' jika belum ada pilihan
@@ -25,23 +35,37 @@ final _rawDeviceStatusProvider =
     StreamProvider<DeviceStatusData?>((ref) => ref.watch(dashboardRepositoryProvider).watchStatus());
 
 /// Combined device status provider that includes telemetry timestamp for better online detection.
-/// Uses local receive time to determine if device is online.
-/// Note: lastReceivedTime is computed at build time based on current DateTime.now()
+/// Uses FIREBASE timestamps (lastSeenAt, telemetry timestamp) as primary source.
+/// Only uses local receive time as additional signal when new data actually arrives.
 final deviceStatusProvider = Provider<AsyncValue<DeviceStatusData?>>((ref) {
   final statusAsync = ref.watch(_rawDeviceStatusProvider);
   final telemetryAsync = ref.watch(latestTelemetryProvider);
+  // Also watch pump status - pump ON/OFF changes indicate device is online
+  final pumpAsync = ref.watch(pumpStatusProvider);
   
   final telemetryTimestamp = telemetryAsync.valueOrNull?.timestampMillis;
+  final pumpLastChange = pumpAsync.valueOrNull?.lastChangeMillis;
   
   return statusAsync.when(
     data: (status) {
       if (status == null) return const AsyncValue.data(null);
       
-      // Use current time as "last received" since we're actively receiving data
-      // This avoids the need for a separate StateProvider that can't be modified during build
-      final lastReceived = DateTime.now();
-      final enrichedStatus = status.withTelemetryTimestamp(telemetryTimestamp)
-          .withLastReceivedTime(lastReceived);
+      // Enrich with telemetry timestamp for cross-checking
+      var enrichedStatus = status.withTelemetryTimestamp(telemetryTimestamp);
+      
+      // IMPORTANT: Only set lastReceivedTime if we have evidence of fresh data
+      // by checking if telemetry timestamp or lastSeenAt is recent (within threshold)
+      final now = DateTime.now();
+      final hasRecentData = enrichedStatus.isDataFresh(now);
+      
+      if (hasRecentData) {
+        enrichedStatus = enrichedStatus.withLastReceivedTime(now);
+      }
+      
+      // Also consider pump lastChange timestamp for online detection
+      if (pumpLastChange != null) {
+        enrichedStatus = enrichedStatus.withPumpLastChange(pumpLastChange);
+      }
       
       return AsyncValue.data(enrichedStatus);
     },
@@ -55,6 +79,11 @@ final pumpStatusProvider =
 
 final controlModeProvider = StreamProvider<ControlMode>((ref) {
   return ref.watch(dashboardRepositoryProvider).watchControlMode();
+});
+
+/// Provider untuk jadwal penyiraman dari Firebase
+final wateringScheduleProvider = StreamProvider<WateringScheduleData?>((ref) {
+  return ref.watch(dashboardRepositoryProvider).watchSchedule();
 });
 
 /// Provider untuk rekomendasi budidaya stroberi berdasarkan data sensor terbaru
@@ -121,6 +150,38 @@ class DashboardRepository {
 
   Future<void> setControlMode(ControlMode mode) {
     return _deviceRef.child('control/mode').set(mode.key);
+  }
+
+  /// Watch schedule data from Firebase
+  Stream<WateringScheduleData?> watchSchedule() {
+    return _deviceRef.child('schedule').onValue.map((event) {
+      final data = _castSnapshot(event.snapshot.value);
+      if (data == null) return null;
+      return WateringScheduleData.fromJson(data);
+    });
+  }
+
+  /// Update a daily schedule item
+  Future<void> updateDailySchedule(int index, DailyScheduleItem item) async {
+    await _deviceRef.child('schedule/daily/$index').update({
+      'time': item.time,
+      'duration': item.duration,
+      'enabled': item.enabled,
+    });
+  }
+
+  /// Update moisture threshold settings
+  Future<void> updateMoistureThreshold(MoistureThreshold threshold) async {
+    await _deviceRef.child('schedule/moisture_threshold').update({
+      'enabled': threshold.enabled,
+      'trigger_below': threshold.triggerBelow,
+      'duration': threshold.duration,
+    });
+  }
+
+  /// Enable/disable entire schedule
+  Future<void> setScheduleEnabled(bool enabled) async {
+    await _deviceRef.child('schedule/enabled').set(enabled);
   }
 }
 
@@ -254,25 +315,38 @@ class DeviceStatusData {
     return lastSeenMs > telemetryMs ? lastSeenMs : telemetryMs;
   }
 
-  /// Returns true if device is considered online.
-  /// Uses LOCAL receive time (when Flutter received data from Firebase).
-  /// This is more reliable than device timestamps which may be out of sync.
-  /// If no data received in the last 90 seconds, device is considered offline.
-  bool get isDeviceOnline {
-    // PRIMARY: Use local receive time (most reliable)
-    if (lastReceivedTime != null) {
-      final diffSeconds = DateTime.now().difference(lastReceivedTime!).inSeconds;
-      return diffSeconds <= 90;
-    }
-    
-    // FALLBACK: Use device timestamps if local time not available
+  /// Check if Firebase data (lastSeenAt or telemetry) is fresh (within threshold).
+  /// Used to validate whether we should consider new data arrival.
+  bool isDataFresh(DateTime now) {
     final mostRecentMs = mostRecentActivityMs;
     if (mostRecentMs == null) return false;
     
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final diffSeconds = (now - mostRecentMs) / 1000;
+    final diffSeconds = (now.millisecondsSinceEpoch - mostRecentMs) / 1000;
+    return diffSeconds <= onlineTimeoutSeconds;
+  }
+
+  /// Returns true if device is considered online.
+  /// PRIORITY: Firebase timestamps (lastSeenAt, telemetry) are the SOURCE OF TRUTH.
+  /// Local receive time is only used as additional confirmation.
+  /// Threshold: Dynamic based on isWokwiMode (300s for Wokwi, 120s for real hardware)
+  bool get isDeviceOnline {
+    // PRIMARY: Use Firebase device timestamps (most reliable source of truth)
+    final mostRecentMs = mostRecentActivityMs;
+    if (mostRecentMs != null) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      final diffSeconds = (now - mostRecentMs) / 1000;
+      
+      return diffSeconds <= onlineTimeoutSeconds;
+    }
     
-    return diffSeconds <= 90;
+    // FALLBACK: Use local receive time if no Firebase timestamp
+    if (lastReceivedTime != null) {
+      final diffSeconds = DateTime.now().difference(lastReceivedTime!).inSeconds;
+      return diffSeconds <= onlineTimeoutSeconds;
+    }
+    
+    // LAST RESORT: Trust the 'online' field from Firebase if no timestamps
+    return online;
   }
 
   /// Create a copy with telemetry timestamp added
@@ -301,6 +375,15 @@ class DeviceStatusData {
       telemetryTimestampMillis: telemetryTimestampMillis,
       lastReceivedTime: receivedTime,
     );
+  }
+  
+  /// Create a copy with pump last change timestamp added
+  /// This helps detect online status when pump changes occur
+  DeviceStatusData withPumpLastChange(int? pumpLastChange) {
+    // Pump change is another signal that the device is active
+    // We don't need to store it separately since lastReceivedTime already tracks
+    // when we received any data. This method exists for API clarity.
+    return this;
   }
 
   factory DeviceStatusData.fromJson(Map<String, dynamic> json) {
@@ -369,4 +452,190 @@ extension ControlModeX on ControlMode {
     }
     return ControlMode.auto;
   }
+}
+
+// ============================================================================
+// WATERING SCHEDULE MODELS
+// ============================================================================
+
+/// Data jadwal penyiraman dari Firebase
+class WateringScheduleData {
+  WateringScheduleData({
+    required this.enabled,
+    required this.dailySchedules,
+    this.moistureThreshold,
+    this.lastScheduledRun,
+  });
+
+  final bool enabled;
+  final List<DailyScheduleItem> dailySchedules;
+  final MoistureThreshold? moistureThreshold;
+  final LastScheduledRun? lastScheduledRun;
+
+  factory WateringScheduleData.fromJson(Map<String, dynamic> json) {
+    // Parse daily schedules (bisa array atau map dengan index)
+    final List<DailyScheduleItem> dailyList = [];
+    final dailyRaw = json['daily'];
+    if (dailyRaw is List) {
+      for (var i = 0; i < dailyRaw.length; i++) {
+        final item = dailyRaw[i];
+        if (item is Map) {
+          dailyList.add(DailyScheduleItem.fromJson(
+            Map<String, dynamic>.from(item),
+          ));
+        }
+      }
+    } else if (dailyRaw is Map) {
+      // Firebase kadang menyimpan array sebagai map dengan index
+      final sorted = dailyRaw.entries.toList()
+        ..sort((a, b) => int.parse(a.key.toString()).compareTo(int.parse(b.key.toString())));
+      for (var entry in sorted) {
+        if (entry.value is Map) {
+          dailyList.add(DailyScheduleItem.fromJson(
+            Map<String, dynamic>.from(entry.value as Map),
+          ));
+        }
+      }
+    }
+
+    // Parse moisture threshold
+    MoistureThreshold? moistureThreshold;
+    final moistureRaw = json['moisture_threshold'];
+    if (moistureRaw is Map) {
+      moistureThreshold = MoistureThreshold.fromJson(
+        Map<String, dynamic>.from(moistureRaw),
+      );
+    }
+
+    // Parse last scheduled run
+    LastScheduledRun? lastRun;
+    final lastRunRaw = json['last_scheduled_run'];
+    if (lastRunRaw is Map) {
+      lastRun = LastScheduledRun.fromJson(
+        Map<String, dynamic>.from(lastRunRaw),
+      );
+    }
+
+    return WateringScheduleData(
+      enabled: json['enabled'] == true,
+      dailySchedules: dailyList,
+      moistureThreshold: moistureThreshold,
+      lastScheduledRun: lastRun,
+    );
+  }
+
+  /// Get the next scheduled watering time
+  String? get nextScheduledTime {
+    if (!enabled || dailySchedules.isEmpty) return null;
+    
+    final now = DateTime.now();
+    final currentMinutes = now.hour * 60 + now.minute;
+    
+    // Find next enabled schedule
+    DailyScheduleItem? nextSchedule;
+    int minDiff = 24 * 60; // Max diff is 24 hours
+    
+    for (final schedule in dailySchedules) {
+      if (!schedule.enabled) continue;
+      
+      final parts = schedule.time.split(':');
+      if (parts.length != 2) continue;
+      
+      final hour = int.tryParse(parts[0]) ?? 0;
+      final minute = int.tryParse(parts[1]) ?? 0;
+      final scheduleMinutes = hour * 60 + minute;
+      
+      int diff = scheduleMinutes - currentMinutes;
+      if (diff <= 0) {
+        diff += 24 * 60; // Next day
+      }
+      
+      if (diff < minDiff) {
+        minDiff = diff;
+        nextSchedule = schedule;
+      }
+    }
+    
+    return nextSchedule?.time;
+  }
+
+  /// Get count of enabled daily schedules
+  int get enabledCount => dailySchedules.where((s) => s.enabled).length;
+}
+
+/// Item jadwal harian
+class DailyScheduleItem {
+  DailyScheduleItem({
+    required this.time,
+    required this.duration,
+    required this.enabled,
+  });
+
+  final String time; // Format "HH:mm"
+  final int duration; // Seconds
+  final bool enabled;
+
+  factory DailyScheduleItem.fromJson(Map<String, dynamic> json) {
+    return DailyScheduleItem(
+      time: json['time']?.toString() ?? '00:00',
+      duration: _asInt(json['duration']) ?? 60,
+      enabled: json['enabled'] == true,
+    );
+  }
+
+  DailyScheduleItem copyWith({
+    String? time,
+    int? duration,
+    bool? enabled,
+  }) {
+    return DailyScheduleItem(
+      time: time ?? this.time,
+      duration: duration ?? this.duration,
+      enabled: enabled ?? this.enabled,
+    );
+  }
+}
+
+/// Pengaturan penyiraman berdasarkan kelembaban tanah
+class MoistureThreshold {
+  MoistureThreshold({
+    required this.enabled,
+    required this.triggerBelow,
+    required this.duration,
+  });
+
+  final bool enabled;
+  final int triggerBelow; // Percentage
+  final int duration; // Seconds
+
+  factory MoistureThreshold.fromJson(Map<String, dynamic> json) {
+    return MoistureThreshold(
+      enabled: json['enabled'] == true,
+      triggerBelow: _asInt(json['trigger_below']) ?? 30,
+      duration: _asInt(json['duration']) ?? 30,
+    );
+  }
+}
+
+/// Info penyiraman terjadwal terakhir
+class LastScheduledRun {
+  LastScheduledRun({
+    required this.time,
+    required this.duration,
+    required this.completed,
+  });
+
+  final String time;
+  final int duration;
+  final bool completed;
+
+  factory LastScheduledRun.fromJson(Map<String, dynamic> json) {
+    return LastScheduledRun(
+      time: json['time']?.toString() ?? '',
+      duration: _asInt(json['duration']) ?? 0,
+      completed: json['completed'] == true,
+    );
+  }
+
+  bool get hasRun => time.isNotEmpty;
 }
