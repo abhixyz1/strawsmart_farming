@@ -188,8 +188,8 @@ class NotificationRtdbRepository {
     final now = DateTime.now();
     final diff = now.difference(lastNotificationTime);
 
-    // 30 minutes cooldown
-    return diff.inMinutes < 30;
+    // DEBUG: 1 minute cooldown untuk testing (ubah ke 30 untuk production)
+    return diff.inMinutes < 1;
   }
 
   /// Set cooldown timestamp
