@@ -169,16 +169,23 @@ class AnomalyDetectionService {
   }) async {
     final stateKey = '${deviceId}_humidity';
     final isAnomaly = current < expectedMin || current > expectedMax;
+    final wasAnomaly = _previousAnomalyStates[stateKey] ?? false;
 
-    if (isAnomaly && await _shouldSendNotification(stateKey)) {
-      await _notificationService.showHumidityAnomalyNotification(
-        deviceId: deviceId,
-        locationName: locationName,
-        currentHumidity: current,
-        expectedMin: expectedMin,
-        expectedMax: expectedMax,
-      );
-      await _recordNotificationSent(stateKey);
+    // Send notification if:
+    // 1. Currently in anomaly state AND
+    // 2. Was NOT in anomaly before (state changed) OR cooldown expired
+    if (isAnomaly) {
+      final shouldNotify = !wasAnomaly || await _shouldSendNotification(stateKey);
+      if (shouldNotify) {
+        await _notificationService.showHumidityAnomalyNotification(
+          deviceId: deviceId,
+          locationName: locationName,
+          currentHumidity: current,
+          expectedMin: expectedMin,
+          expectedMax: expectedMax,
+        );
+        await _recordNotificationSent(stateKey);
+      }
     }
 
     _previousAnomalyStates[stateKey] = isAnomaly;
@@ -193,16 +200,23 @@ class AnomalyDetectionService {
   }) async {
     final stateKey = '${deviceId}_moisture';
     final isAnomaly = current < expectedMin || current > expectedMax;
+    final wasAnomaly = _previousAnomalyStates[stateKey] ?? false;
 
-    if (isAnomaly && await _shouldSendNotification(stateKey)) {
-      await _notificationService.showMoistureAnomalyNotification(
-        deviceId: deviceId,
-        locationName: locationName,
-        currentMoisture: current,
-        expectedMin: expectedMin,
-        expectedMax: expectedMax,
-      );
-      await _recordNotificationSent(stateKey);
+    // Send notification if:
+    // 1. Currently in anomaly state AND
+    // 2. Was NOT in anomaly before (state changed) OR cooldown expired
+    if (isAnomaly) {
+      final shouldNotify = !wasAnomaly || await _shouldSendNotification(stateKey);
+      if (shouldNotify) {
+        await _notificationService.showMoistureAnomalyNotification(
+          deviceId: deviceId,
+          locationName: locationName,
+          currentMoisture: current,
+          expectedMin: expectedMin,
+          expectedMax: expectedMax,
+        );
+        await _recordNotificationSent(stateKey);
+      }
     }
 
     _previousAnomalyStates[stateKey] = isAnomaly;
@@ -217,23 +231,32 @@ class AnomalyDetectionService {
   }) async {
     final stateKey = '${deviceId}_ph';
     final isAnomaly = current < expectedMin || current > expectedMax;
+    final wasAnomaly = _previousAnomalyStates[stateKey] ?? false;
 
-    if (isAnomaly && await _shouldSendNotification(stateKey)) {
-      await _notificationService.showPhAnomalyNotification(
-        deviceId: deviceId,
-        locationName: locationName,
-        currentPh: current,
-        expectedMin: expectedMin,
-        expectedMax: expectedMax,
-      );
-      await _recordNotificationSent(stateKey);
+    // Send notification if:
+    // 1. Currently in anomaly state AND
+    // 2. Was NOT in anomaly before (state changed) OR cooldown expired
+    if (isAnomaly) {
+      final shouldNotify = !wasAnomaly || await _shouldSendNotification(stateKey);
+      if (shouldNotify) {
+        await _notificationService.showPhAnomalyNotification(
+          deviceId: deviceId,
+          locationName: locationName,
+          currentPh: current,
+          expectedMin: expectedMin,
+          expectedMax: expectedMax,
+        );
+        await _recordNotificationSent(stateKey);
+      }
     }
 
     _previousAnomalyStates[stateKey] = isAnomaly;
   }
 
   /// Check if enough time has passed since last notification untuk mencegah spam
-  /// Cooldown 30 menit memastikan notifikasi tidak terlalu sering
+  /// Cooldown 5 menit memastikan notifikasi tidak terlalu sering untuk anomali berulang
+  /// Note: Notifikasi LANGSUNG dikirim saat nilai berubah dari normal ke anomali
+  /// Cooldown hanya berlaku untuk anomali yang terus berlanjut
   /// Menggunakan RTDB untuk cooldown global across all users
   Future<bool> _shouldSendNotification(String key) async {
     return !await _rtdbRepository.isCooldownActive(key);

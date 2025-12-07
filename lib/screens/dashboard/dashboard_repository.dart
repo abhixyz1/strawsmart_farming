@@ -2,7 +2,9 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/services/strawberry_guidance.dart';
 import '../../models/guidance_item.dart';
+import '../../models/cultivation_batch.dart';
 import '../greenhouse/greenhouse_repository.dart';
+import '../batch/batch_repository.dart';
 
 /// DEVELOPMENT MODE: Set true saat testing dengan Wokwi simulator
 /// Wokwi memiliki delay 2-5 menit karena processing di server
@@ -81,15 +83,74 @@ final controlModeProvider = StreamProvider<ControlMode>((ref) {
   return ref.watch(dashboardRepositoryProvider).watchControlMode();
 });
 
-/// Provider untuk jadwal penyiraman dari Firebase
+/// Provider untuk jadwal penyiraman dari Firebase (raw data)
 final wateringScheduleProvider = StreamProvider<WateringScheduleData?>((ref) {
   return ref.watch(dashboardRepositoryProvider).watchSchedule();
+});
+
+/// Provider untuk jadwal penyiraman yang sudah disesuaikan dengan fase tanaman aktif
+/// Aturan: 
+/// 1. Jika tidak ada batch aktif: Semua jadwal di-disable (tidak ada tanaman untuk disiram)
+/// 2. Jadwal penyiraman siang (12:00-17:00) hanya aktif untuk fase pembibitan/seedling
+final phaseAwareScheduleProvider = Provider<AsyncValue<WateringScheduleData?>>((ref) {
+  final scheduleAsync = ref.watch(wateringScheduleProvider);
+  final activeBatchAsync = ref.watch(activeBatchProvider);
+  
+  return scheduleAsync.whenData((schedule) {
+    if (schedule == null) return null;
+    
+    final activeBatch = activeBatchAsync.valueOrNull;
+    final currentPhase = activeBatch?.currentPhase;
+    
+    // Jika tidak ada batch aktif, disable semua jadwal (tidak ada tanaman untuk disiram)
+    if (activeBatch == null) {
+      final disabledSchedules = schedule.dailySchedules.map((item) {
+        return item.copyWith(enabled: false);
+      }).toList();
+      
+      return WateringScheduleData(
+        enabled: schedule.enabled,
+        dailySchedules: disabledSchedules,
+        moistureThreshold: schedule.moistureThreshold,
+        lastScheduledRun: schedule.lastScheduledRun,
+      );
+    }
+    
+    // Jika fase adalah pembibitan, return schedule asli
+    if (currentPhase == GrowthPhase.seedling) {
+      return schedule;
+    }
+    
+    // Untuk fase selain pembibitan, disable jadwal siang (12:00-17:00)
+    final adjustedSchedules = schedule.dailySchedules.map((item) {
+      final parts = item.time.split(':');
+      if (parts.length == 2) {
+        final hour = int.tryParse(parts[0]) ?? 0;
+        // Disable noon schedule (12:00-17:00) for non-seedling phases
+        if (hour >= 12 && hour < 17) {
+          return item.copyWith(enabled: false);
+        }
+      }
+      return item;
+    }).toList();
+    
+    return WateringScheduleData(
+      enabled: schedule.enabled,
+      dailySchedules: adjustedSchedules,
+      moistureThreshold: schedule.moistureThreshold,
+      lastScheduledRun: schedule.lastScheduledRun,
+    );
+  });
 });
 
 /// Provider untuk rekomendasi budidaya stroberi berdasarkan data sensor terbaru
 final strawberryGuidanceProvider = Provider<List<GuidanceItem>>((ref) {
   final snapshot = ref.watch(latestTelemetryProvider).valueOrNull;
-  return StrawberryGuidanceService.instance.getRecommendations(snapshot);
+  final activeBatch = ref.watch(activeBatchProvider).valueOrNull;
+  return StrawberryGuidanceService.instance.getRecommendations(
+    snapshot,
+    phaseRequirements: activeBatch?.currentRequirements,
+  );
 });
 
 class DashboardRepository {

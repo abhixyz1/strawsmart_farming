@@ -1,8 +1,6 @@
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/notification_service.dart';
 import '../../../models/cultivation_batch.dart';
@@ -25,17 +23,12 @@ class _ScheduleInfoCardState extends ConsumerState<ScheduleInfoCard> {
   static const _lightRose = Color(0xFFFFCDD2);
   static const _accentTeal = Color(0xFF26A69A);
   
-  // Notification preference
-  bool _notificationEnabled = true;
-  static const _notificationPrefKey = 'schedule_notification_enabled';
-  
   // Track previous pump state for notification trigger
   bool? _previousPumpState;
   
   @override
   void initState() {
     super.initState();
-    _loadNotificationPreference();
     _initNotificationService();
   }
   
@@ -44,77 +37,10 @@ class _ScheduleInfoCardState extends ConsumerState<ScheduleInfoCard> {
     await notificationService.initialize();
   }
   
-  Future<void> _loadNotificationPreference() async {
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _notificationEnabled = prefs.getBool(_notificationPrefKey) ?? true;
-    });
-  }
-  
-  Future<void> _toggleNotification() async {
-    final notificationService = ref.read(notificationServiceProvider);
-    
-    // If enabling, make sure we have permission
-    if (!_notificationEnabled) {
-      final hasPermission = await notificationService.requestPermission();
-      if (!hasPermission && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Izin notifikasi diperlukan. Aktifkan di pengaturan perangkat.'),
-            action: SnackBarAction(
-              label: 'OK',
-              onPressed: () {},
-            ),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.orange[700],
-          ),
-        );
-        return;
-      }
-    }
-    
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _notificationEnabled = !_notificationEnabled;
-    });
-    await prefs.setBool(_notificationPrefKey, _notificationEnabled);
-    
-    HapticFeedback.lightImpact();
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              Icon(
-                _notificationEnabled 
-                    ? Icons.notifications_active_rounded 
-                    : Icons.notifications_off_rounded,
-                color: Colors.white,
-                size: 20,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  _notificationEnabled 
-                      ? 'Notifikasi jadwal penyiraman diaktifkan' 
-                      : 'Notifikasi jadwal penyiraman dinonaktifkan',
-                ),
-              ),
-            ],
-          ),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: _notificationEnabled ? _accentTeal : Colors.grey[700],
-        ),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final scheduleAsync = ref.watch(wateringScheduleProvider);
+    // Use phase-aware schedule provider that automatically disables noon watering for non-seedling phases
+    final scheduleAsync = ref.watch(phaseAwareScheduleProvider);
     final activeBatchAsync = ref.watch(activeBatchProvider);
     final pumpAsync = ref.watch(pumpStatusProvider);
     final theme = Theme.of(context);
@@ -150,39 +76,37 @@ class _ScheduleInfoCardState extends ConsumerState<ScheduleInfoCard> {
   ) async {
     // Only trigger notification when state changes from OFF to ON
     if (_previousPumpState != null && isPumpActive && !_previousPumpState!) {
-      if (_notificationEnabled) {
-        final notificationService = ref.read(notificationServiceProvider);
-        final deviceId = ref.read(dashboardDeviceIdProvider);
-        
-        // Fetch locationName dari RTDB
-        final database = FirebaseDatabase.instance;
-        final snapshot = await database
-            .ref('devices')
-            .child(deviceId)
-            .child('info')
-            .child('locationName')
-            .get();
-        
-        final locationName = snapshot.exists 
-            ? (snapshot.value as String?) 
-            : null;
-        
-        // Get current schedule duration (use first enabled schedule)
-        int? duration;
-        for (final item in schedule.dailySchedules) {
-          if (item.enabled) {
-            duration = item.duration;
-            break;
-          }
+      final notificationService = ref.read(notificationServiceProvider);
+      final deviceId = ref.read(dashboardDeviceIdProvider);
+      
+      // Fetch locationName dari RTDB
+      final database = FirebaseDatabase.instance;
+      final snapshot = await database
+          .ref('devices')
+          .child(deviceId)
+          .child('info')
+          .child('locationName')
+          .get();
+      
+      final locationName = snapshot.exists 
+          ? (snapshot.value as String?) 
+          : null;
+      
+      // Get current schedule duration (use first enabled schedule)
+      int? duration;
+      for (final item in schedule.dailySchedules) {
+        if (item.enabled) {
+          duration = item.duration;
+          break;
         }
-        
-        notificationService.showWateringStartNotification(
-          deviceId: deviceId,
-          locationName: locationName ?? 'Greenhouse $deviceId',
-          batchName: activeBatch?.name,
-          durationSeconds: duration,
-        );
       }
+      
+      notificationService.showWateringStartNotification(
+        deviceId: deviceId,
+        locationName: locationName ?? 'Greenhouse $deviceId',
+        batchName: activeBatch?.name,
+        durationSeconds: duration,
+      );
     }
     // Update previous state
     _previousPumpState = isPumpActive;
@@ -249,33 +173,7 @@ class _ScheduleInfoCardState extends ConsumerState<ScheduleInfoCard> {
                     _buildWateringStatusBadge(theme),
                     const SizedBox(width: 10),
                   ],
-                  // Notification toggle button
-                  GestureDetector(
-                    onTap: _toggleNotification,
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: _notificationEnabled
-                            ? _accentTeal.withAlpha(60)
-                            : Colors.white.withAlpha(20),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: _notificationEnabled
-                              ? _accentTeal.withAlpha(100)
-                              : Colors.white.withAlpha(30),
-                        ),
-                      ),
-                      child: Icon(
-                        _notificationEnabled 
-                            ? Icons.notifications_active_rounded
-                            : Icons.notifications_off_rounded,
-                        size: 20,
-                        color: _notificationEnabled 
-                            ? _accentTeal 
-                            : Colors.white.withAlpha(150),
-                      ),
-                    ),
-                  ),
+                  // Notification toggle removed - all notification settings now in Settings (Pengaturan)
                 ],
               ),
 
@@ -863,9 +761,9 @@ class _ScheduleInfoCardState extends ConsumerState<ScheduleInfoCard> {
     final hour = int.tryParse(parts[0]) ?? 0;
     
     if (hour >= 5 && hour < 12) {
-      return Icons.wb_sunny_rounded; // Pagi
+      return Icons.wb_twilight_rounded; // Pagi (sunrise/dawn)
     } else if (hour >= 12 && hour < 17) {
-      return Icons.wb_twilight_rounded; // Siang
+      return Icons.wb_sunny_rounded; // Siang (noon/full sun)
     } else {
       return Icons.nights_stay_rounded; // Malam
     }

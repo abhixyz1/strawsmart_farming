@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/services/notification_repository.dart';
+import '../../../core/services/notification_rtdb_repository.dart';
 import '../../greenhouse/greenhouse_repository.dart';
 
 /// App bar untuk dashboard dengan selector greenhouse
@@ -238,7 +239,7 @@ class _NotificationButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final unreadCountAsync = ref.watch(unreadNotificationCountProvider);
+    final unreadCountAsync = ref.watch(rtdbUnreadCountProvider);
 
     return Stack(
       clipBehavior: Clip.none,

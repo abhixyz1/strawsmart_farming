@@ -1,8 +1,10 @@
 import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../models/notification_item.dart';
+import '../../screens/greenhouse/greenhouse_repository.dart';
 
 /// Repository untuk manage notification history di Firebase RTDB
 class NotificationRtdbRepository {
@@ -43,26 +45,41 @@ class NotificationRtdbRepository {
 
   /// Get notifications for user
   Stream<List<NotificationItem>> getNotifications(String userId) {
+    print('DEBUG: Getting notifications for userId: $userId');
+    
     return _notificationsRef
         .child(userId)
         .orderByChild('timestamp')
         .onValue
         .map((event) {
-      if (!event.snapshot.exists) return <NotificationItem>[];
+      print('DEBUG: RTDB event received, exists: ${event.snapshot.exists}');
+      
+      if (!event.snapshot.exists) {
+        print('DEBUG: No notifications found in RTDB for user $userId');
+        return <NotificationItem>[];
+      }
 
       final data = event.snapshot.value as Map<dynamic, dynamic>?;
-      if (data == null) return <NotificationItem>[];
+      if (data == null) {
+        print('DEBUG: Notification data is null for user $userId');
+        return <NotificationItem>[];
+      }
 
+      print('DEBUG: Notification data keys: ${data.keys.length}');
+      
       final notifications = <NotificationItem>[];
       data.forEach((key, value) {
         try {
           final notifData = Map<String, dynamic>.from(value as Map);
           notifications.add(NotificationItem.fromJson(notifData));
         } catch (e) {
+          print('DEBUG: Error parsing notification $key: $e');
           // Skip invalid entries
         }
       });
 
+      print('DEBUG: Parsed ${notifications.length} notifications');
+      
       // Sort by timestamp descending (newest first)
       notifications.sort((a, b) => b.timestamp.compareTo(a.timestamp));
       return notifications;
@@ -119,6 +136,14 @@ class NotificationRtdbRepository {
         .child(userId)
         .child(notificationId)
         .update({'isRead': true});
+  }
+
+  /// Delete notification permanently
+  Future<void> deleteNotification(String userId, String notificationId) async {
+    await _notificationsRef
+        .child(userId)
+        .child(notificationId)
+        .remove();
   }
 
   /// Mark all notifications as read
@@ -188,8 +213,7 @@ class NotificationRtdbRepository {
     final now = DateTime.now();
     final diff = now.difference(lastNotificationTime);
 
-    // DEBUG: 1 minute cooldown untuk testing (ubah ke 30 untuk production)
-    return diff.inMinutes < 1;
+    return diff.inMinutes < 5;
   }
 
   /// Set cooldown timestamp
@@ -234,4 +258,61 @@ class NotificationRtdbRepository {
 /// Provider untuk NotificationRtdbRepository
 final notificationRtdbRepositoryProvider = Provider<NotificationRtdbRepository>((ref) {
   return NotificationRtdbRepository(FirebaseDatabase.instance);
+});
+
+/// Provider untuk streaming notifications dari RTDB untuk user saat ini
+/// Auto-refresh dengan real-time updates dari Firebase
+final rtdbNotificationsStreamProvider = StreamProvider.autoDispose<List<NotificationItem>>((ref) {
+  final repo = ref.watch(notificationRtdbRepositoryProvider);
+  final user = FirebaseAuth.instance.currentUser;
+  
+  print('DEBUG: rtdbNotificationsStreamProvider - User: ${user?.uid ?? "null"}');
+  
+  if (user == null) {
+    print('DEBUG: No user logged in, returning empty stream');
+    // Return empty stream instead of error when not logged in
+    return Stream.value([]);
+  }
+  
+  // Add error handling to the stream
+  return repo.getNotifications(user.uid).handleError((error, stackTrace) {
+    // Log error but don't crash the app
+    print('Error loading notifications: $error');
+    print('Stack trace: $stackTrace');
+    return [];
+  });
+});
+
+/// Provider untuk unread notification count dari RTDB (filtered by user's greenhouses)
+final rtdbUnreadCountProvider = StreamProvider.autoDispose<int>((ref) async* {
+  final repo = ref.watch(notificationRtdbRepositoryProvider);
+  final user = FirebaseAuth.instance.currentUser;
+  
+  if (user == null) {
+    yield 0;
+    return;
+  }
+  
+  // Get user's greenhouses to filter notifications
+  final greenhousesAsync = ref.watch(availableGreenhousesProvider);
+  
+  await for (final greenhouses in Stream.value(greenhousesAsync)) {
+    if (greenhouses.hasValue) {
+      final userDeviceIds = greenhouses.value!
+          .map((g) => g.deviceId)
+          .whereType<String>()
+          .toSet();
+      
+      // Initial count
+      yield await repo.getUnreadCountByDevices(user.uid, userDeviceIds);
+      
+      // Poll every 5 seconds for updates
+      await for (var _ in Stream.periodic(const Duration(seconds: 5))) {
+        yield await repo.getUnreadCountByDevices(user.uid, userDeviceIds);
+      }
+    } else {
+      yield 0;
+    }
+    break;
+  }
 });

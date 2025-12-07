@@ -5,11 +5,13 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/utils/image_utils.dart';
 import '../../models/user_role.dart';
 import '../auth/auth_controller.dart';
 import '../auth/user_profile_repository.dart';
 import '../admin/user_management_screen.dart';
+import '../settings/notification_settings_screen.dart';
 import 'profile_controller.dart';
 import '../../core/providers/theme_provider.dart';
 
@@ -71,16 +73,12 @@ class _SettingsView extends ConsumerWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(child: _PreferencesSection()),
-                    SizedBox(width: 16),
-                    Expanded(child: _SecuritySection()),
                   ],
                 )
               else
                 const Column(
                   children: [
                     _PreferencesSection(),
-                    SizedBox(height: 16),
-                    _SecuritySection(),
                   ],
                 ),
               const SizedBox(height: 16),
@@ -238,7 +236,48 @@ class _PreferencesSection extends ConsumerStatefulWidget {
 }
 
 class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
-  bool _notificationsEnabled = true;
+  static const String _masterNotificationKey = 'master_notification_enabled';
+  static const String _keyTempAnomaly = 'notif_temp';
+  static const String _keyHumidityAnomaly = 'notif_humidity';
+  static const String _keyMoistureAnomaly = 'notif_moisture';
+  static const String _keyWatering = 'notif_watering';
+  static const String _keyPhaseChange = 'notif_phase';
+  
+  bool _masterEnabled = true;
+  int _activeCount = 0;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationStatus();
+  }
+
+  Future<void> _loadNotificationStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final masterEnabled = prefs.getBool(_masterNotificationKey) ?? true;
+    
+    int count = 0;
+    if (masterEnabled) {
+      if (prefs.getBool(_keyTempAnomaly) ?? true) count++;
+      if (prefs.getBool(_keyHumidityAnomaly) ?? true) count++;
+      if (prefs.getBool(_keyMoistureAnomaly) ?? true) count++;
+      if (prefs.getBool(_keyWatering) ?? true) count++;
+      if (prefs.getBool(_keyPhaseChange) ?? true) count++;
+    }
+    
+    setState(() {
+      _masterEnabled = masterEnabled;
+      _activeCount = count;
+      _isLoading = false;
+    });
+  }
+
+  String get _notificationSubtitle {
+    if (_isLoading) return 'Memuat...';
+    if (!_masterEnabled) return 'Nonaktif - Semua notifikasi dimatikan';
+    return 'Aktif - $_activeCount dari 5 notifikasi';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -253,13 +292,18 @@ class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
         _SettingsTile(
           icon: Icons.notifications_outlined,
           title: 'Notifikasi',
-          subtitle: _notificationsEnabled ? 'Aktif' : 'Nonaktif',
-          trailing: Switch(
-            value: _notificationsEnabled,
-            onChanged: (value) {
-              setState(() => _notificationsEnabled = value);
-            },
-          ),
+          subtitle: _notificationSubtitle,
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () async {
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const NotificationSettingsScreen(),
+              ),
+            );
+            // Refresh notification status after returning
+            _loadNotificationStatus();
+          },
         ),
         _SettingsTile(
           icon: Icons.dark_mode_outlined,
@@ -274,40 +318,6 @@ class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
               );
             },
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SecuritySection extends StatelessWidget {
-  const _SecuritySection();
-
-  @override
-  Widget build(BuildContext context) {
-    return _SettingsCard(
-      title: 'Keamanan',
-      icon: Icons.security_outlined,
-      children: [
-        _SettingsTile(
-          icon: Icons.lock_outline,
-          title: 'Ubah Kata Sandi',
-          subtitle: 'Segera hadir',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Fitur segera tersedia')),
-            );
-          },
-        ),
-        _SettingsTile(
-          icon: Icons.fingerprint,
-          title: 'Autentikasi Biometrik',
-          subtitle: 'Segera hadir',
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Fitur segera tersedia')),
-            );
-          },
         ),
       ],
     );
