@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../models/notification_item.dart';
 import 'notification_repository.dart';
@@ -11,6 +12,42 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// Service untuk menangani notifikasi lokal per greenhouse/device
 /// Support multi-device dan anomaly detection
+///
+/// ==================== NOTIFICATION SYSTEM HIERARCHY ====================
+/// Sistem notifikasi memiliki 2 tingkat kontrol:
+///
+/// 1. MASTER TOGGLE (di Settings/Pengaturan):
+///    - Mengontrol SEMUA notifikasi aplikasi
+///    - Key: 'master_notification_enabled'
+///    - Jika OFF: Tidak ada notifikasi yang akan muncul sama sekali
+///
+/// 2. INDIVIDUAL TYPE TOGGLES (di Pengaturan Notifikasi):
+///    - Suhu Tidak Normal: 'notif_temp'
+///    - Kelembaban Udara Tidak Normal: 'notif_humidity'
+///    - Kelembaban Tanah Tidak Normal: 'notif_moisture'
+///    - Penyiraman: 'notif_watering'
+///    - Perubahan Fase Pertumbuhan: 'notif_phase'
+///    - Hanya berfungsi jika master toggle = ON
+///
+/// PRIORITAS: Master Toggle > Individual Type Toggle
+///
+/// ==================== BACKGROUND NOTIFICATIONS ====================
+/// Aplikasi ini menggunakan 2 sistem notifikasi:
+///
+/// 1. LOCAL NOTIFICATIONS (flutter_local_notifications):
+///    - Untuk notifikasi saat app aktif (foreground)
+///    - Langsung dari kode Flutter
+///
+/// 2. FIREBASE CLOUD MESSAGING (FCM):
+///    - Untuk notifikasi saat app tidak aktif (background/terminated)
+///    - Dikirim dari Firebase Functions/backend
+///    - Bekerja bahkan saat app di-kill user
+///
+/// Setup FCM:
+/// - Background handler: firebaseMessagingBackgroundHandler di fcm_service.dart
+/// - Token disimpan ke RTDB untuk backend
+/// - Backend mengirim notifikasi via FCM Admin SDK
+/// ========================================================================
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -71,6 +108,40 @@ class NotificationService {
     debugPrint('Notification tapped: ${response.payload}');
   }
 
+  /// Check if master notification toggle is enabled (from Settings)
+  /// Returns true if notifications are enabled globally
+  Future<bool> _isMasterNotificationEnabled() async {
+    const key = 'master_notification_enabled';
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(key) ?? true; // Default: enabled
+  }
+
+  /// Check if specific notification type is enabled
+  /// Returns true if the notification type is enabled
+  Future<bool> _isNotificationTypeEnabled(NotificationType type) async {
+    final prefs = await SharedPreferences.getInstance();
+    
+    switch (type) {
+      case NotificationType.anomalyTemperature:
+        return prefs.getBool('notif_temp') ?? true;
+      case NotificationType.anomalyHumidity:
+        return prefs.getBool('notif_humidity') ?? true;
+      case NotificationType.anomalyMoisture:
+        return prefs.getBool('notif_moisture') ?? true;
+      case NotificationType.wateringStart:
+      case NotificationType.wateringComplete:
+        return prefs.getBool('notif_watering') ?? true;
+      case NotificationType.batchPhaseChange:
+        return prefs.getBool('notif_phase') ?? true;
+      case NotificationType.anomalyPh:
+      case NotificationType.deviceOffline:
+      case NotificationType.deviceOnline:
+      case NotificationType.scheduleExecuted:
+      default:
+        return true; // Default: enabled for these types
+    }
+  }
+
   /// Request notification permission
   Future<bool> requestPermission() async {
     if (!_isInitialized) {
@@ -107,6 +178,15 @@ class NotificationService {
   }) async {
     if (!_isInitialized) await initialize();
     if (!_hasPermission) return;
+
+    // Check master notification toggle from Settings (Pengaturan)
+    // If disabled, no notifications will be shown at all
+    final masterEnabled = await _isMasterNotificationEnabled();
+    if (!masterEnabled) return;
+
+    // Check if this specific notification type is enabled
+    final typeEnabled = await _isNotificationTypeEnabled(type);
+    if (!typeEnabled) return;
 
     // Check if device notifications are enabled
     if (_repository != null) {
@@ -224,7 +304,7 @@ class NotificationService {
     required double expectedMax,
   }) async {
     final status = currentTemp < expectedMin ? 'terlalu rendah' : 'terlalu tinggi';
-    final body = '⚠️ Suhu di $locationName $status: ${currentTemp.toStringAsFixed(1)}°C (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)}°C)';
+    final body = 'Suhu di $locationName $status: ${currentTemp.toStringAsFixed(1)}°C (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)}°C)';
 
     await _showAndSaveNotification(
       deviceId: deviceId,
@@ -251,7 +331,7 @@ class NotificationService {
     required double expectedMax,
   }) async {
     final status = currentHumidity < expectedMin ? 'terlalu rendah' : 'terlalu tinggi';
-    final body = '⚠️ Kelembaban udara di $locationName $status: ${currentHumidity.toStringAsFixed(1)}% (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)}%)';
+    final body = 'Kelembaban udara di $locationName $status: ${currentHumidity.toStringAsFixed(1)}% (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)}%)';
 
     await _showAndSaveNotification(
       deviceId: deviceId,
@@ -278,7 +358,7 @@ class NotificationService {
     required double expectedMax,
   }) async {
     final status = currentMoisture < expectedMin ? 'terlalu kering' : 'terlalu basah';
-    final body = '⚠️ Kelembaban tanah di $locationName $status: ${currentMoisture.toStringAsFixed(1)}% (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)}%)';
+    final body = 'Kelembaban tanah di $locationName $status: ${currentMoisture.toStringAsFixed(1)}% (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)}%)';
 
     await _showAndSaveNotification(
       deviceId: deviceId,
@@ -305,7 +385,7 @@ class NotificationService {
     required double expectedMax,
   }) async {
     final status = currentPh < expectedMin ? 'terlalu asam' : 'terlalu basa';
-    final body = '⚠️ pH tanah di $locationName $status: ${currentPh.toStringAsFixed(1)} (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)})';
+    final body = 'pH tanah di $locationName $status: ${currentPh.toStringAsFixed(1)} (Normal: ${expectedMin.toStringAsFixed(1)}-${expectedMax.toStringAsFixed(1)})';
 
     await _showAndSaveNotification(
       deviceId: deviceId,
@@ -365,8 +445,8 @@ class NotificationService {
     String? batchName,
   }) async {
     final bodyText = batchName != null
-        ? '⏰ Penyiraman untuk $batchName di $locationName akan dimulai pada $scheduleTime (durasi: ${durationSeconds}s)'
-        : '⏰ Jadwal penyiraman di $locationName akan dimulai pada $scheduleTime (durasi: ${durationSeconds}s)';
+        ? 'Penyiraman untuk $batchName di $locationName akan dimulai pada $scheduleTime (durasi: ${durationSeconds}s)'
+        : 'Jadwal penyiraman di $locationName akan dimulai pada $scheduleTime (durasi: ${durationSeconds}s)';
 
     await _showAndSaveNotification(
       deviceId: deviceId,
@@ -393,7 +473,7 @@ class NotificationService {
     required String toPhase,
     required int dayInPhase,
   }) async {
-    final body = '🌱 Batch $batchName di $locationName telah memasuki fase $toPhase (Hari ke-$dayInPhase). Fase sebelumnya: $fromPhase.';
+    final body = 'Batch $batchName di $locationName telah memasuki fase $toPhase (Hari ke-$dayInPhase). Fase sebelumnya: $fromPhase.';
 
     await _showAndSaveNotification(
       deviceId: deviceId,

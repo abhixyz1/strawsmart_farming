@@ -80,6 +80,17 @@ class NotificationItem {
 
   /// Create from JSON
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    // Parse timestamp - handle both int (RTDB milliseconds) and String (ISO8601)
+    DateTime timestamp;
+    final timestampValue = json['timestamp'];
+    if (timestampValue is int) {
+      timestamp = DateTime.fromMillisecondsSinceEpoch(timestampValue);
+    } else if (timestampValue is String) {
+      timestamp = DateTime.parse(timestampValue);
+    } else {
+      timestamp = DateTime.now();
+    }
+    
     return NotificationItem(
       id: json['id'] as String,
       deviceId: json['deviceId'] as String,
@@ -90,7 +101,7 @@ class NotificationItem {
       ),
       title: json['title'] as String,
       message: json['message'] as String,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      timestamp: timestamp,
       isRead: json['isRead'] as bool? ?? false,
       data: json['data'] as Map<String, dynamic>?,
     );

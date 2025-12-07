@@ -1,4 +1,5 @@
 import '../../models/guidance_item.dart';
+import '../../models/cultivation_batch.dart';
 import '../../screens/dashboard/dashboard_repository.dart';
 
 /// Service untuk memberikan rekomendasi budidaya stroberi
@@ -8,26 +9,20 @@ class StrawberryGuidanceService {
   StrawberryGuidanceService._();
   static final instance = StrawberryGuidanceService._();
 
-  // ==================== PARAMETER IDEAL ====================
-  // Standar budidaya stroberi yang optimal
+  // ==================== PARAMETER DEFAULT ====================
+  // Fallback values jika tidak ada batch aktif
   
   /// Suhu ideal: 24-28°C
-  static const double _tempMin = 24.0;
-  static const double _tempMax = 28.0;
-  static const double _tempCriticalMin = 18.0; // Terlalu dingin
-  static const double _tempCriticalMax = 32.0; // Terlalu panas
+  static const double _defaultTempMin = 24.0;
+  static const double _defaultTempMax = 28.0;
   
   /// Kelembaban udara ideal: 55-70%
-  static const double _humidityMin = 55.0;
-  static const double _humidityMax = 70.0;
-  static const double _humidityCriticalMin = 40.0;
-  static const double _humidityCriticalMax = 85.0;
+  static const double _defaultHumidityMin = 55.0;
+  static const double _defaultHumidityMax = 70.0;
   
   /// Kelembaban tanah ideal: 35-45%
-  static const double _soilMoistureMin = 35.0;
-  static const double _soilMoistureMax = 45.0;
-  static const double _soilMoistureCriticalMin = 25.0;
-  static const double _soilMoistureCriticalMax = 60.0;
+  static const double _defaultSoilMoistureMin = 35.0;
+  static const double _defaultSoilMoistureMax = 45.0;
   
   /// Intensitas cahaya ideal: 15-20k lux
   /// Asumsi ADC max ~4095 = full sun (~50k lux)
@@ -36,14 +31,33 @@ class StrawberryGuidanceService {
   static const double _lightAdcMax = 1600.0;
   static const double _lightAdcCriticalMin = 800.0;
 
-  /// Generate rekomendasi berdasarkan snapshot sensor terbaru
+  /// Generate rekomendasi berdasarkan snapshot sensor terbaru dan fase tanaman aktif
   /// Returns list of guidance items sorted by priority
-  List<GuidanceItem> getRecommendations(SensorSnapshot? snapshot) {
+  List<GuidanceItem> getRecommendations(
+    SensorSnapshot? snapshot, {
+    PhaseRequirements? phaseRequirements,
+  }) {
     if (snapshot == null) {
       return [];
     }
 
     final recommendations = <GuidanceItem>[];
+    
+    // Gunakan threshold dari fase aktif, atau default jika tidak ada batch
+    final tempMin = phaseRequirements?.minTemp.toDouble() ?? _defaultTempMin;
+    final tempMax = phaseRequirements?.maxTemp.toDouble() ?? _defaultTempMax;
+    final humidityMin = phaseRequirements?.minHumidity.toDouble() ?? _defaultHumidityMin;
+    final humidityMax = phaseRequirements?.maxHumidity.toDouble() ?? _defaultHumidityMax;
+    final soilMoistureMin = phaseRequirements?.minSoilMoisture.toDouble() ?? _defaultSoilMoistureMin;
+    final soilMoistureMax = phaseRequirements?.maxSoilMoisture.toDouble() ?? _defaultSoilMoistureMax;
+    
+    // Hitung critical thresholds dengan margin 15%
+    final tempCriticalMin = tempMin - (tempMin * 0.15);
+    final tempCriticalMax = tempMax + (tempMax * 0.15);
+    final humidityCriticalMin = humidityMin - (humidityMin * 0.15);
+    final humidityCriticalMax = humidityMax + (humidityMax * 0.15);
+    final soilMoistureCriticalMin = soilMoistureMin - (soilMoistureMin * 0.15);
+    final soilMoistureCriticalMax = soilMoistureMax + (soilMoistureMax * 0.15);
     
     // Hanya analisis jika data tersedia
     final temp = snapshot.temperature;
@@ -53,17 +67,17 @@ class StrawberryGuidanceService {
 
     // Analisis suhu
     if (temp != null) {
-      _analyzeTemperature(temp, recommendations);
+      _analyzeTemperature(temp, recommendations, tempMin, tempMax, tempCriticalMin, tempCriticalMax);
     }
     
     // Analisis kelembaban udara
     if (humidity != null) {
-      _analyzeHumidity(humidity, recommendations);
+      _analyzeHumidity(humidity, recommendations, humidityMin, humidityMax, humidityCriticalMin, humidityCriticalMax);
     }
     
     // Analisis kelembaban tanah
     if (soilMoisture != null) {
-      _analyzeSoilMoisture(soilMoisture, recommendations);
+      _analyzeSoilMoisture(soilMoisture, recommendations, soilMoistureMin, soilMoistureMax, soilMoistureCriticalMin, soilMoistureCriticalMax);
     }
     
     // Analisis cahaya
@@ -73,7 +87,7 @@ class StrawberryGuidanceService {
     
     // Analisis kombinasi (combo conditions)
     if (temp != null && humidity != null && soilMoisture != null) {
-      _analyzeComboConditions(temp, humidity, soilMoisture, recommendations);
+      _analyzeComboConditions(temp, humidity, soilMoisture, recommendations, tempMax, humidityMin, humidityMax, soilMoistureMin);
     }
     
     // Sort by priority (critical first)
@@ -83,17 +97,24 @@ class StrawberryGuidanceService {
   }
 
   /// Analisis suhu dan tambahkan rekomendasi jika perlu
-  void _analyzeTemperature(double temp, List<GuidanceItem> recommendations) {
-    if (temp < _tempCriticalMin) {
+  void _analyzeTemperature(
+    double temp,
+    List<GuidanceItem> recommendations,
+    double tempMin,
+    double tempMax,
+    double tempCriticalMin,
+    double tempCriticalMax,
+  ) {
+    if (temp < tempCriticalMin) {
       // Terlalu dingin - Critical
       recommendations.add(GuidanceItem(
         title: 'Suhu Terlalu Rendah',
-        description: 'Suhu ${temp.toStringAsFixed(1)}°C terlalu dingin. Tutup ventilasi atau gunakan heater untuk mencapai 24-28°C.',
+        description: 'Suhu ${temp.toStringAsFixed(1)}°C terlalu dingin. Tutup ventilasi atau gunakan heater untuk mencapai ${tempMin.toStringAsFixed(0)}-${tempMax.toStringAsFixed(0)}°C.',
         priority: 1,
         type: GuidanceType.temperature,
         sensorValue: '${temp.toStringAsFixed(1)}°C',
       ));
-    } else if (temp > _tempCriticalMax) {
+    } else if (temp > tempCriticalMax) {
       // Terlalu panas - Critical
       recommendations.add(GuidanceItem(
         title: 'Suhu Terlalu Tinggi',
@@ -102,16 +123,16 @@ class StrawberryGuidanceService {
         type: GuidanceType.temperature,
         sensorValue: '${temp.toStringAsFixed(1)}°C',
       ));
-    } else if (temp < _tempMin) {
+    } else if (temp < tempMin) {
       // Agak dingin - Warning
       recommendations.add(GuidanceItem(
         title: 'Suhu Sedikit Rendah',
-        description: 'Suhu ${temp.toStringAsFixed(1)}°C kurang optimal. Kurangi ventilasi untuk mencapai 24-28°C.',
+        description: 'Suhu ${temp.toStringAsFixed(1)}°C kurang optimal. Kurangi ventilasi untuk mencapai ${tempMin.toStringAsFixed(0)}-${tempMax.toStringAsFixed(0)}°C.',
         priority: 2,
         type: GuidanceType.temperature,
         sensorValue: '${temp.toStringAsFixed(1)}°C',
       ));
-    } else if (temp > _tempMax) {
+    } else if (temp > tempMax) {
       // Agak panas - Warning
       recommendations.add(GuidanceItem(
         title: 'Suhu Sedikit Tinggi',
@@ -133,8 +154,15 @@ class StrawberryGuidanceService {
   }
 
   /// Analisis kelembaban udara
-  void _analyzeHumidity(double humidity, List<GuidanceItem> recommendations) {
-    if (humidity < _humidityCriticalMin) {
+  void _analyzeHumidity(
+    double humidity,
+    List<GuidanceItem> recommendations,
+    double humidityMin,
+    double humidityMax,
+    double humidityCriticalMin,
+    double humidityCriticalMax,
+  ) {
+    if (humidity < humidityCriticalMin) {
       // Terlalu kering - Critical
       recommendations.add(GuidanceItem(
         title: 'Kelembaban Udara Sangat Rendah',
@@ -143,7 +171,7 @@ class StrawberryGuidanceService {
         type: GuidanceType.humidity,
         sensorValue: '${humidity.toStringAsFixed(1)}%',
       ));
-    } else if (humidity > _humidityCriticalMax) {
+    } else if (humidity > humidityCriticalMax) {
       // Terlalu lembab - Critical
       recommendations.add(GuidanceItem(
         title: 'Kelembaban Udara Terlalu Tinggi',
@@ -152,7 +180,7 @@ class StrawberryGuidanceService {
         type: GuidanceType.humidity,
         sensorValue: '${humidity.toStringAsFixed(1)}%',
       ));
-    } else if (humidity < _humidityMin) {
+    } else if (humidity < humidityMin) {
       // Agak kering - Warning
       recommendations.add(GuidanceItem(
         title: 'Kelembaban Udara Rendah',
@@ -161,7 +189,7 @@ class StrawberryGuidanceService {
         type: GuidanceType.humidity,
         sensorValue: '${humidity.toStringAsFixed(1)}%',
       ));
-    } else if (humidity > _humidityMax) {
+    } else if (humidity > humidityMax) {
       // Agak lembab - Warning
       recommendations.add(GuidanceItem(
         title: 'Kelembaban Udara Tinggi',
@@ -183,8 +211,15 @@ class StrawberryGuidanceService {
   }
 
   /// Analisis kelembaban tanah
-  void _analyzeSoilMoisture(double soilMoisture, List<GuidanceItem> recommendations) {
-    if (soilMoisture < _soilMoistureCriticalMin) {
+  void _analyzeSoilMoisture(
+    double soilMoisture,
+    List<GuidanceItem> recommendations,
+    double soilMoistureMin,
+    double soilMoistureMax,
+    double soilMoistureCriticalMin,
+    double soilMoistureCriticalMax,
+  ) {
+    if (soilMoisture < soilMoistureCriticalMin) {
       // Terlalu kering - Critical
       recommendations.add(GuidanceItem(
         title: 'Tanah Sangat Kering',
@@ -193,7 +228,7 @@ class StrawberryGuidanceService {
         type: GuidanceType.soilMoisture,
         sensorValue: '${soilMoisture.toStringAsFixed(1)}%',
       ));
-    } else if (soilMoisture > _soilMoistureCriticalMax) {
+    } else if (soilMoisture > soilMoistureCriticalMax) {
       // Terlalu basah - Critical
       recommendations.add(GuidanceItem(
         title: 'Tanah Terlalu Basah',
@@ -202,7 +237,7 @@ class StrawberryGuidanceService {
         type: GuidanceType.soilMoisture,
         sensorValue: '${soilMoisture.toStringAsFixed(1)}%',
       ));
-    } else if (soilMoisture < _soilMoistureMin) {
+    } else if (soilMoisture < soilMoistureMin) {
       // Agak kering - Warning
       recommendations.add(GuidanceItem(
         title: 'Tanah Perlu Disiram',
@@ -211,7 +246,7 @@ class StrawberryGuidanceService {
         type: GuidanceType.soilMoisture,
         sensorValue: '${soilMoisture.toStringAsFixed(1)}%',
       ));
-    } else if (soilMoisture > _soilMoistureMax) {
+    } else if (soilMoisture > soilMoistureMax) {
       // Agak basah - Warning
       recommendations.add(GuidanceItem(
         title: 'Tanah Cukup Basah',
@@ -285,9 +320,13 @@ class StrawberryGuidanceService {
     double humidity,
     double soilMoisture,
     List<GuidanceItem> recommendations,
+    double tempMax,
+    double humidityMin,
+    double humidityMax,
+    double soilMoistureMin,
   ) {
     // Combo 1: Suhu tinggi + kelembaban rendah = Heat stress
-    if (temperature > _tempMax && humidity < _humidityMin) {
+    if (temperature > tempMax && humidity < humidityMin) {
       recommendations.add(GuidanceItem(
         title: 'Risiko Heat Stress',
         description: 'Kombinasi suhu tinggi (${temperature.toStringAsFixed(1)}°C) dan kelembaban rendah (${humidity.toStringAsFixed(1)}%) berisiko heat stress. Aktifkan misting sambil meningkatkan ventilasi.',
@@ -297,7 +336,7 @@ class StrawberryGuidanceService {
     }
     
     // Combo 2: Suhu tinggi + kelembaban tinggi = Jamur
-    if (temperature > _tempMax && humidity > _humidityMax) {
+    if (temperature > tempMax && humidity > humidityMax) {
       recommendations.add(GuidanceItem(
         title: 'Risiko Penyakit Jamur',
         description: 'Kombinasi suhu tinggi (${temperature.toStringAsFixed(1)}°C) dan kelembaban tinggi (${humidity.toStringAsFixed(1)}%) ideal untuk pertumbuhan jamur. Tingkatkan sirkulasi udara segera.',
@@ -307,7 +346,7 @@ class StrawberryGuidanceService {
     }
     
     // Combo 3: Tanah kering + kelembaban rendah = Dehidrasi
-    if (soilMoisture < _soilMoistureMin && humidity < _humidityMin) {
+    if (soilMoisture < soilMoistureMin && humidity < humidityMin) {
       recommendations.add(GuidanceItem(
         title: 'Risiko Dehidrasi Tanaman',
         description: 'Tanah kering (${soilMoisture.toStringAsFixed(1)}%) dan udara kering (${humidity.toStringAsFixed(1)}%) dapat menyebabkan tanaman layu. Segera siram dan aktifkan misting.',

@@ -4,8 +4,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/services/notification_repository.dart';
+import '../../core/services/notification_rtdb_repository.dart';
 import '../greenhouse/greenhouse_repository.dart';
 import '../../models/notification_item.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Halaman untuk menampilkan history notifikasi
 class NotificationScreen extends ConsumerStatefulWidget {
@@ -21,7 +23,8 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final notificationsAsync = ref.watch(notificationsProvider);
+    // Use the proper StreamProvider for RTDB notifications
+    final notificationsAsync = ref.watch(rtdbNotificationsStreamProvider);
     final availableGreenhousesAsync = ref.watch(availableGreenhousesProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -59,15 +62,18 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
           IconButton(
             icon: const Icon(Icons.done_all),
             onPressed: () async {
-              final repo = ref.read(notificationRepositoryProvider);
-              await repo.markAllAsRead();
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Semua notifikasi ditandai sudah dibaca'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+              final user = FirebaseAuth.instance.currentUser;
+              if (user != null) {
+                final repo = ref.read(notificationRtdbRepositoryProvider);
+                await repo.markAllAsRead(user.uid);
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Semua notifikasi ditandai sudah dibaca'),
+                    duration: Duration(seconds: 2),
+                  ),
+                );
+              }
             },
             tooltip: 'Tandai semua sudah dibaca',
           ),
@@ -80,10 +86,16 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
 
           return notificationsAsync.when(
             data: (allNotifications) {
+              // Debug: Print notification count
+              print('DEBUG: Total notifications from RTDB: ${allNotifications.length}');
+              print('DEBUG: User device IDs: $userDeviceIds');
+              
               // Filter notifikasi: hanya tampilkan dari greenhouse user
               final notifications = allNotifications
                   .where((n) => userDeviceIds.contains(n.deviceId))
                   .toList();
+              
+              print('DEBUG: Filtered notifications: ${notifications.length}');
 
               if (notifications.isEmpty) {
                 return Center(
@@ -178,10 +190,36 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
             ],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (_, __) => const Center(
-          child: Text('Gagal memuat notifikasi'),
+        loading: () => const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 16),
+              Text('Memuat notifikasi...'),
+            ],
+          ),
         ),
+        error: (error, stackTrace) {
+          print('DEBUG: Error loading notifications: $error');
+          print('DEBUG: Stack trace: $stackTrace');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.error_outline, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text('Gagal memuat notifikasi'),
+                const SizedBox(height: 8),
+                Text(
+                  error.toString(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        },
       );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -263,7 +301,8 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
     ThemeData theme,
     bool isDark,
   ) {
-    final repo = ref.read(notificationRepositoryProvider);
+    final user = FirebaseAuth.instance.currentUser;
+    final repo = ref.read(notificationRtdbRepositoryProvider);
     
     return Dismissible(
       key: Key(notification.id),
@@ -278,19 +317,35 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
         ),
         child: const Icon(Icons.delete, color: Colors.white),
       ),
-      onDismissed: (_) async {
-        await repo.deleteNotification(notification.id);
+      confirmDismiss: (_) async {
+        // Delete from RTDB first
+        if (user != null) {
+          try {
+            await repo.deleteNotification(user.uid, notification.id);
+            return true; // Allow dismiss
+          } catch (e) {
+            print('Error deleting notification: $e');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Gagal menghapus notifikasi'),
+                  backgroundColor: Colors.red,
+                  duration: Duration(seconds: 2),
+                ),
+              );
+            }
+            return false; // Cancel dismiss
+          }
+        }
+        return false;
+      },
+      onDismissed: (_) {
+        // Show snackbar after successful deletion
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('Notifikasi dihapus'),
-              action: SnackBarAction(
-                label: 'BATAL',
-                onPressed: () async {
-                  await repo.saveNotification(notification);
-                },
-              ),
-              duration: const Duration(seconds: 3),
+            const SnackBar(
+              content: Text('Notifikasi dihapus'),
+              duration: Duration(seconds: 2),
             ),
           );
         }
@@ -302,8 +357,8 @@ class _NotificationScreenState extends ConsumerState<NotificationScreen> {
             : (isDark ? Colors.grey[800] : Colors.blue[50]),
         child: InkWell(
           onTap: () async {
-            if (!notification.isRead) {
-              await repo.markAsRead(notification.id);
+            if (!notification.isRead && user != null) {
+              await repo.markAsRead(user.uid, notification.id);
             }
           },
           borderRadius: BorderRadius.circular(12),
