@@ -13,21 +13,23 @@ class PdfReportGenerator {
     final dateFormat = DateFormat('dd MMM yyyy', 'id_ID');
     final dateTimeFormat = DateFormat('dd MMM yyyy HH:mm', 'id_ID');
 
+    // Page 1: Summary, Statistics, Important Events
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(32),
+        maxPages: 20, // Increase max pages limit
         header: (context) => _buildHeader(data, dateFormat),
         footer: (context) => _buildFooter(context, data),
         build: (context) => [
           _buildSummarySection(data, dateFormat),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 16),
           _buildStatisticsSection(data),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 16),
           _buildImportantEventsSection(data, dateTimeFormat),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 16),
           _buildWateringHistorySection(data, dateTimeFormat),
-          pw.SizedBox(height: 20),
+          pw.SizedBox(height: 16),
           _buildSensorDataTable(data, dateTimeFormat),
         ],
       ),
@@ -311,7 +313,9 @@ class PdfReportGenerator {
     ReportData data,
     DateFormat dateTimeFormat,
   ) {
-    final events = data.importantEvents.take(10).toList();
+    // Limit to max 10 events to avoid too many pages
+    const maxEventsInPdf = 10;
+    final events = data.importantEvents.take(maxEventsInPdf).toList();
 
     if (events.isEmpty) {
       return pw.Container(
@@ -331,9 +335,11 @@ class PdfReportGenerator {
               ),
             ),
             pw.SizedBox(width: 8),
-            pw.Text(
-              'Tidak ada kejadian penting dalam periode ini. Kondisi greenhouse normal.',
-              style: const pw.TextStyle(fontSize: 11, color: PdfColors.green800),
+            pw.Expanded(
+              child: pw.Text(
+                'Tidak ada kejadian penting dalam periode ini.',
+                style: const pw.TextStyle(fontSize: 11, color: PdfColors.green800),
+              ),
             ),
           ],
         ),
@@ -343,48 +349,47 @@ class PdfReportGenerator {
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(
-          'Kejadian Penting',
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.grey300),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(2),
-            1: const pw.FlexColumnWidth(1.5),
-            2: const pw.FlexColumnWidth(3),
-          },
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-              children: [
-                _buildTableHeader('Waktu'),
-                _buildTableHeader('Jenis'),
-                _buildTableHeader('Keterangan'),
-              ],
+            pw.Text(
+              'Kejadian Penting',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
-            ...events.map((event) => pw.TableRow(
-                  children: [
-                    _buildTableCell(dateTimeFormat.format(event.timestamp)),
-                    _buildTableCell(event.type.label),
-                    _buildTableCell(event.message),
-                  ],
-                )),
+            pw.Text(
+              'Total: ${data.importantEvents.length} kejadian',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+            ),
           ],
         ),
-        if (data.importantEvents.length > 10)
+        pw.SizedBox(height: 8),
+        pw.TableHelper.fromTextArray(
+          context: null,
+          headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          cellStyle: const pw.TextStyle(fontSize: 9),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          cellHeight: 25,
+          cellAlignments: {
+            0: pw.Alignment.centerLeft,
+            1: pw.Alignment.center,
+            2: pw.Alignment.centerLeft,
+          },
+          headers: ['Waktu', 'Jenis', 'Keterangan'],
+          data: events.map((event) => [
+            dateTimeFormat.format(event.timestamp),
+            event.type.label,
+            event.message,
+          ]).toList(),
+        ),
+        if (data.importantEvents.length > maxEventsInPdf)
           pw.Padding(
             padding: const pw.EdgeInsets.only(top: 4),
             child: pw.Text(
-              '... dan ${data.importantEvents.length - 10} kejadian lainnya',
-              style: const pw.TextStyle(
-                fontSize: 9,
-                color: PdfColors.grey500,
-              ),
+              '... dan ${data.importantEvents.length - maxEventsInPdf} kejadian lainnya',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
             ),
           ),
       ],
@@ -409,52 +414,49 @@ class PdfReportGenerator {
       );
     }
 
-    final events = data.wateringHistory.take(20).toList();
+    // Limit to max 10 events
+    const maxWateringInPdf = 10;
+    final events = data.wateringHistory.take(maxWateringInPdf).toList();
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(
-          'Riwayat Penyiraman',
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.grey300),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(2),
-            1: const pw.FlexColumnWidth(1.5),
-            2: const pw.FlexColumnWidth(1.5),
-            3: const pw.FlexColumnWidth(2),
-          },
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.blue100),
-              children: [
-                _buildTableHeader('Waktu'),
-                _buildTableHeader('Durasi'),
-                _buildTableHeader('Sumber'),
-                _buildTableHeader('Jadwal'),
-              ],
+            pw.Text(
+              'Riwayat Penyiraman',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
-            ...events.map((event) => pw.TableRow(
-                  children: [
-                    _buildTableCell(dateTimeFormat.format(event.timestamp)),
-                    _buildTableCell(event.durationText),
-                    _buildTableCell(event.source.label),
-                    _buildTableCell(event.scheduleName ?? '-'),
-                  ],
-                )),
+            pw.Text(
+              'Total: ${data.wateringHistory.length}x',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+            ),
           ],
         ),
-        if (data.wateringHistory.length > 20)
+        pw.SizedBox(height: 8),
+        pw.TableHelper.fromTextArray(
+          context: null,
+          headerStyle: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
+          cellStyle: const pw.TextStyle(fontSize: 9),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.blue100),
+          cellHeight: 25,
+          headers: ['Waktu', 'Durasi', 'Sumber', 'Jadwal'],
+          data: events.map((event) => [
+            dateTimeFormat.format(event.timestamp),
+            event.durationText,
+            event.source.label,
+            event.scheduleName ?? '-',
+          ]).toList(),
+        ),
+        if (data.wateringHistory.length > maxWateringInPdf)
           pw.Padding(
             padding: const pw.EdgeInsets.only(top: 4),
             child: pw.Text(
-              '... dan ${data.wateringHistory.length - 20} penyiraman lainnya',
+              '... dan ${data.wateringHistory.length - maxWateringInPdf} penyiraman lainnya',
               style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
             ),
           ),
@@ -470,94 +472,82 @@ class PdfReportGenerator {
       return pw.SizedBox();
     }
 
-    // Sample data - show every Nth reading to keep PDF manageable
-    final sampleRate = (data.readings.length / 50).ceil().clamp(1, 100);
-    final sampledReadings = <int>[];
-    for (int i = 0; i < data.readings.length; i += sampleRate) {
-      sampledReadings.add(i);
+    // Smart sampling - max 20 rows for PDF
+    const maxRowsInPdf = 20;
+    
+    final totalReadings = data.readings.length;
+    List<int> sampledIndices;
+    
+    if (totalReadings <= maxRowsInPdf) {
+      sampledIndices = List.generate(totalReadings, (i) => i);
+    } else {
+      // Sample evenly across the dataset
+      final step = totalReadings / maxRowsInPdf;
+      sampledIndices = List.generate(
+        maxRowsInPdf,
+        (i) => (i * step).floor().clamp(0, totalReadings - 1),
+      );
+      // Ensure first and last reading included
+      sampledIndices[0] = 0;
+      sampledIndices[sampledIndices.length - 1] = totalReadings - 1;
+      // Remove duplicates and sort
+      sampledIndices = sampledIndices.toSet().toList()..sort();
     }
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        pw.Text(
-          'Data Sensor (Sampel)',
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Text(
-          'Menampilkan ${sampledReadings.length} dari ${data.readings.length} pembacaan',
-          style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey500),
-        ),
-        pw.SizedBox(height: 8),
-        pw.Table(
-          border: pw.TableBorder.all(color: PdfColors.grey300),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(2),
-            1: const pw.FlexColumnWidth(1),
-            2: const pw.FlexColumnWidth(1),
-            3: const pw.FlexColumnWidth(1),
-            4: const pw.FlexColumnWidth(1),
-          },
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-              children: [
-                _buildTableHeader('Waktu'),
-                _buildTableHeader('Suhu (°C)'),
-                _buildTableHeader('Humid (%)'),
-                _buildTableHeader('Tanah (%)'),
-                _buildTableHeader('Cahaya'),
-              ],
+            pw.Text(
+              'Data Sensor (Sampel)',
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+              ),
             ),
-            ...sampledReadings.map((i) {
-              final reading = data.readings[i];
-              return pw.TableRow(
-                children: [
-                  _buildTableCell(dateTimeFormat.format(reading.timestamp)),
-                  _buildTableCell(
-                    reading.temperature?.toStringAsFixed(1) ?? '-',
-                  ),
-                  _buildTableCell(
-                    reading.humidity?.toStringAsFixed(1) ?? '-',
-                  ),
-                  _buildTableCell(
-                    reading.soilMoisturePercent?.toStringAsFixed(1) ?? '-',
-                  ),
-                  _buildTableCell(
-                    reading.lightIntensity?.toStringAsFixed(0) ?? '-',
-                  ),
-                ],
-              );
-            }),
+            pw.Text(
+              '${sampledIndices.length} dari $totalReadings data',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey600),
+            ),
           ],
         ),
+        pw.SizedBox(height: 8),
+        pw.TableHelper.fromTextArray(
+          context: null,
+          headerStyle: pw.TextStyle(fontSize: 8, fontWeight: pw.FontWeight.bold),
+          cellStyle: const pw.TextStyle(fontSize: 8),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          cellHeight: 22,
+          headers: ['Waktu', 'Suhu (°C)', 'Humid (%)', 'Tanah (%)', 'Cahaya'],
+          data: sampledIndices.map((i) {
+            final reading = data.readings[i];
+            return [
+              dateTimeFormat.format(reading.timestamp),
+              reading.temperature?.toStringAsFixed(1) ?? '-',
+              reading.humidity?.toStringAsFixed(1) ?? '-',
+              reading.soilMoisturePercent?.toStringAsFixed(1) ?? '-',
+              reading.lightIntensity?.toStringAsFixed(0) ?? '-',
+            ];
+          }).toList(),
+        ),
+        if (totalReadings > maxRowsInPdf)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 6),
+            child: pw.Container(
+              padding: const pw.EdgeInsets.all(8),
+              decoration: pw.BoxDecoration(
+                color: PdfColors.blue50,
+                borderRadius: pw.BorderRadius.circular(4),
+              ),
+              child: pw.Text(
+                'Data ditampilkan secara sampling. Untuk data lengkap, gunakan export CSV.',
+                style: const pw.TextStyle(fontSize: 8, color: PdfColors.blue800),
+              ),
+            ),
+          ),
       ],
-    );
-  }
-
-  pw.Widget _buildTableHeader(String text) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
-      child: pw.Text(
-        text,
-        style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
-        textAlign: pw.TextAlign.center,
-      ),
-    );
-  }
-
-  pw.Widget _buildTableCell(String text) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.all(6),
-      child: pw.Text(
-        text,
-        style: const pw.TextStyle(fontSize: 9),
-        textAlign: pw.TextAlign.center,
-      ),
     );
   }
 }
