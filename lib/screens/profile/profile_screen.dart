@@ -309,12 +309,18 @@ class _PreferencesSectionState extends ConsumerState<_PreferencesSection> {
           icon: Icons.dark_mode_outlined,
           title: 'Mode Gelap',
           subtitle: isDarkMode ? 'Aktif' : 'Nonaktif',
-          trailing: Switch(
-            value: isDarkMode,
-            onChanged: (value) {
-              // Explicitly set to dark or light based on switch value
-              ref.read(themeModeProvider.notifier).setThemeMode(
-                value ? ThemeMode.dark : ThemeMode.light,
+          trailing: Consumer(
+            builder: (context, ref, _) {
+              final themeMode = ref.watch(themeModeProvider);
+              final isDark = themeMode == ThemeMode.dark ||
+                (themeMode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark);
+              return Switch(
+                value: isDark,
+                onChanged: (value) {
+                  ref.read(themeModeProvider.notifier).setThemeMode(
+                    value ? ThemeMode.dark : ThemeMode.light,
+                  );
+                },
               );
             },
           ),
