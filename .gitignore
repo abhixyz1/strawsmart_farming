@@ -44,7 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-
 node_modules/
 package-lock.json
 package.json  # kalau hanya untuk tooling ekspor, bukan bagian app
@@ -52,3 +51,4 @@ firestore_export.json
 export.js
 strawsmart-farming-af721-default-rtdb-export.json
 strawsmart-farming-af721-firebase-adminsdk-fbsvc-cc8c5954b5.json
+.vscode/

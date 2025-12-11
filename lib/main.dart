@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+// ...firebase_messaging import removed...
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,7 +10,7 @@ import 'app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/providers/theme_provider.dart';
 import 'core/services/notification_repository.dart';
-import 'core/services/fcm_service.dart';
+// ...fcm_service import removed...
 
 // Provider untuk SharedPreferences
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
@@ -23,9 +23,7 @@ Future<void> main() async {
   // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Setup FCM background message handler
-  // Handler ini HARUS didaftarkan di top-level, bukan di dalam widget
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  // ...FCM background message handler removed...
 
   // Initialize Indonesian locale for date formatting
   await initializeDateFormatting('id_ID', null);
@@ -33,8 +31,7 @@ Future<void> main() async {
   // Initialize SharedPreferences for notification repository
   final prefs = await SharedPreferences.getInstance();
   
-  // Initialize FCM service
-  await FCMService().initialize();
+  // ...FCM service initialization removed...
 
   runApp(
     ProviderScope(

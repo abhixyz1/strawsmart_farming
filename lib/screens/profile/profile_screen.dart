@@ -561,6 +561,12 @@ class _EditProfileSheetState extends ConsumerState<_EditProfileSheet> {
               activeControlsWidgetColor: primaryColor,
               initAspectRatio: CropAspectRatioPreset.square,
               lockAspectRatio: true,
+              statusBarColor: primaryColor,
+              backgroundColor: Colors.black,
+              dimmedLayerColor: Colors.black54,
+              cropFrameStrokeWidth: 3,
+              cropGridStrokeWidth: 1,
+              hideBottomControls: false,
             ),
             IOSUiSettings(
               title: 'Crop Foto Profil',

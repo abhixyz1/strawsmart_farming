@@ -43,10 +43,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 ///    - Dikirim dari Firebase Functions/backend
 ///    - Bekerja bahkan saat app di-kill user
 ///
-/// Setup FCM:
-/// - Background handler: firebaseMessagingBackgroundHandler di fcm_service.dart
-/// - Token disimpan ke RTDB untuk backend
-/// - Backend mengirim notifikasi via FCM Admin SDK
+/// Setup FCM: (FCM is no longer used)
 /// ========================================================================
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();

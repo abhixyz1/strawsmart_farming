@@ -58,23 +58,25 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       ),
       body: greenhouse == null
           ? _buildNoGreenhouseSelected()
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildGreenhouseInfo(greenhouse),
-                  const SizedBox(height: 16),
-                  _buildDateRangePicker(dateRange),
-                  const SizedBox(height: 24),
-                  _buildReportPreview(reportAsync),
-                  const SizedBox(height: 24),
-                  _buildExportButtons(reportAsync),
-                  if (_errorMessage != null) ...[
+          : SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildGreenhouseInfo(greenhouse),
                     const SizedBox(height: 16),
-                    _buildErrorMessage(),
+                    _buildDateRangePicker(dateRange),
+                    const SizedBox(height: 24),
+                    _buildReportPreview(reportAsync),
+                    const SizedBox(height: 24),
+                    _buildExportButtons(reportAsync),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 16),
+                      _buildErrorMessage(),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
     );

@@ -213,7 +213,7 @@ class NotificationRtdbRepository {
     final now = DateTime.now();
     final diff = now.difference(lastNotificationTime);
 
-    return diff.inMinutes < 5;
+    return diff.inMinutes < 15;
   }
 
   /// Set cooldown timestamp

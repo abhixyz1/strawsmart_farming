@@ -71,9 +71,9 @@ dependencies:
   
   # Notifications
   flutter_local_notifications: ^18.0.1
-  firebase_messaging: ^16.0.4 
 
 dev_dependencies:
+  patrol: ^3.7.0
   flutter_test:
     sdk: flutter
   integration_test:

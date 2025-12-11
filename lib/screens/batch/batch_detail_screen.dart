@@ -1941,172 +1941,174 @@ class _AddJournalSheetState extends ConsumerState<_AddJournalSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-        left: 20,
-        right: 20,
-        top: 24,
-      ),
-      child: SingleChildScrollView(
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Tambah Jurnal',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<JournalEntryType>(
-                initialValue: _selectedType,
-                decoration: const InputDecoration(
-                  labelText: 'Tipe Aktivitas',
-                  border: OutlineInputBorder(),
-                ),
-                items: JournalEntryType.values.map((type) {
-                  return DropdownMenuItem(
-                    value: type,
-                    child: Row(
-                      children: [
-                        Text(type.emoji),
-                        const SizedBox(width: 8),
-                        Text(type.label),
-                      ],
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom + 32,
+          left: 20,
+          right: 20,
+          top: 24,
+        ),
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Tambah Jurnal',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  if (value != null) {
-                    setState(() => _selectedType = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              InkWell(
-                onTap: _pickDate,
-                child: InputDecorator(
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<JournalEntryType>(
+                  initialValue: _selectedType,
                   decoration: const InputDecoration(
-                    labelText: 'Tanggal Aktivitas',
+                    labelText: 'Tipe Aktivitas',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.calendar_today),
                   ),
-                  child: Text(
-                    DateFormat('dd MMM yyyy', 'id_ID').format(_selectedDate),
+                  items: JournalEntryType.values.map((type) {
+                    return DropdownMenuItem(
+                      value: type,
+                      child: Row(
+                        children: [
+                          Text(type.emoji),
+                          const SizedBox(width: 8),
+                          Text(type.label),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() => _selectedType = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                InkWell(
+                  onTap: _pickDate,
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Tanggal Aktivitas',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text(
+                      DateFormat('dd MMM yyyy', 'id_ID').format(_selectedDate),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Judul',
-                  border: OutlineInputBorder(),
-                ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Judul wajib diisi';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _descController,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Deskripsi',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_selectedType == JournalEntryType.harvest) ...[
+                const SizedBox(height: 16),
                 TextFormField(
-                  controller: _harvestController,
-                  keyboardType: TextInputType.number,
+                  controller: _titleController,
                   decoration: const InputDecoration(
-                    labelText: 'Hasil Panen (kg)',
+                    labelText: 'Judul',
                     border: OutlineInputBorder(),
-                    suffixText: 'kg',
                   ),
                   validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Jumlah panen wajib diisi';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Masukkan angka yang valid';
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Judul wajib diisi';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
-              ],
-              InkWell(
-                onTap: _pickImage,
-                child: Container(
-                  height: 150,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                    borderRadius: BorderRadius.circular(12),
+                TextFormField(
+                  controller: _descController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    labelText: 'Deskripsi',
+                    border: OutlineInputBorder(),
                   ),
-                  child: _selectedPhoto == null
-                      ? const Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.add_a_photo, size: 36, color: Colors.grey),
-                            SizedBox(height: 8),
-                            Text('Tambah Foto (opsional)'),
-                          ],
-                        )
-                      : Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.file(
-                                File(_selectedPhoto!.path),
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                            Positioned(
-                              top: 8,
-                              right: 8,
-                              child: CircleAvatar(
-                                backgroundColor: Colors.black54,
-                                child: IconButton(
-                                  icon: const Icon(Icons.close, color: Colors.white),
-                                  onPressed: () => setState(() => _selectedPhoto = null),
+                ),
+                const SizedBox(height: 16),
+                if (_selectedType == JournalEntryType.harvest) ...[
+                  TextFormField(
+                    controller: _harvestController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Hasil Panen (kg)',
+                      border: OutlineInputBorder(),
+                      suffixText: 'kg',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Jumlah panen wajib diisi';
+                      }
+                      if (double.tryParse(value) == null) {
+                        return 'Masukkan angka yang valid';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                InkWell(
+                  onTap: _pickImage,
+                  child: Container(
+                    height: 150,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: _selectedPhoto == null
+                        ? const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.add_a_photo, size: 36, color: Colors.grey),
+                              SizedBox(height: 8),
+                              Text('Tambah Foto (opsional)'),
+                            ],
+                          )
+                        : Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(
+                                  File(_selectedPhoto!.path),
+                                  fit: BoxFit.cover,
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: CircleAvatar(
+                                  backgroundColor: Colors.black54,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white),
+                                    onPressed: () => setState(() => _selectedPhoto = null),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: _isSaving ? null : _handleSave,
-                icon: _isSaving
-                    ? const SizedBox(
-                        height: 18,
-                        width: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.save),
-                label: const Text('Simpan'),
-              ),
-            ],
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: _isSaving ? null : _handleSave,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.save),
+                  label: const Text('Simpan'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
