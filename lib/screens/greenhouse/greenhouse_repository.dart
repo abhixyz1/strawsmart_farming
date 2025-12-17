@@ -10,7 +10,7 @@ import '../auth/auth_repository.dart';
 import '../auth/user_profile_repository.dart';
 
 /// Repository untuk mengelola data Greenhouse dan Membership
-/// 
+///
 /// Struktur Firestore:
 /// - devices/{deviceId} → metadata greenhouse (name, description, deviceId)
 /// - users/{uid}/memberships/{deviceId} → relasi user ke greenhouse
@@ -25,10 +25,7 @@ class GreenhouseRepository {
 
   /// Watch semua greenhouse/devices (untuk admin)
   Stream<List<Greenhouse>> watchAllGreenhouses() {
-    return _firestore
-        .collection('devices')
-        .snapshots()
-        .map((snapshot) {
+    return _firestore.collection('devices').snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data();
         return Greenhouse(
@@ -64,11 +61,9 @@ class GreenhouseRepository {
 
   /// Watch single greenhouse
   Stream<Greenhouse?> watchGreenhouse(String greenhouseId) {
-    return _firestore
-        .collection('devices')
-        .doc(greenhouseId)
-        .snapshots()
-        .map((doc) {
+    return _firestore.collection('devices').doc(greenhouseId).snapshots().map((
+      doc,
+    ) {
       if (!doc.exists) return null;
       final data = doc.data()!;
       return Greenhouse(
@@ -115,10 +110,16 @@ class GreenhouseRepository {
         .collection('memberships')
         .snapshots()
         .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => GreenhouseMembership.fromFirestore(doc.id, userId, doc.data()))
-          .toList();
-    });
+          return snapshot.docs
+              .map(
+                (doc) => GreenhouseMembership.fromFirestore(
+                  doc.id,
+                  userId,
+                  doc.data(),
+                ),
+              )
+              .toList();
+        });
   }
 
   /// Get membership list untuk user tertentu (one-time)
@@ -129,7 +130,10 @@ class GreenhouseRepository {
         .collection('memberships')
         .get();
     return snapshot.docs
-        .map((doc) => GreenhouseMembership.fromFirestore(doc.id, userId, doc.data()))
+        .map(
+          (doc) =>
+              GreenhouseMembership.fromFirestore(doc.id, userId, doc.data()),
+        )
         .toList();
   }
 
@@ -163,12 +167,11 @@ class GreenhouseRepository {
         .doc(greenhouseId)
         .collection('members')
         .doc(userId)
-        .set({
-      'role': role.name,
-      'joinedAt': FieldValue.serverTimestamp(),
-    });
+        .set({'role': role.name, 'joinedAt': FieldValue.serverTimestamp()});
 
-    debugPrint('[GreenhouseRepo] Added membership: $userId -> $greenhouseId ($role)');
+    debugPrint(
+      '[GreenhouseRepo] Added membership: $userId -> $greenhouseId ($role)',
+    );
   }
 
   /// Remove membership
@@ -208,9 +211,9 @@ class GreenhouseRepository {
         .collection('memberships')
         .doc(greenhouseId)
         .update({
-      'role': newRole.name,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+          'role': newRole.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
 
     // Update device's member record
     await _firestore
@@ -218,9 +221,7 @@ class GreenhouseRepository {
         .doc(greenhouseId)
         .collection('members')
         .doc(userId)
-        .update({
-      'role': newRole.name,
-    });
+        .update({'role': newRole.name});
   }
 
   // ==================== DEVICE INFO FROM RTDB ====================
@@ -300,73 +301,66 @@ final greenhouseRepositoryProvider = Provider<GreenhouseRepository>((ref) {
 });
 
 /// Provider untuk daftar semua greenhouse (untuk admin)
-final allGreenhousesProvider = StreamProvider<List<Greenhouse>>((ref) {
+final allGreenhousesProvider = StreamProvider.autoDispose<List<Greenhouse>>((
+  ref,
+) {
   final repo = ref.watch(greenhouseRepositoryProvider);
   return repo.watchAllGreenhouses();
 });
 
 /// Provider untuk daftar membership user yang sedang login
-final userMembershipsProvider = StreamProvider<List<GreenhouseMembership>>((ref) {
-  final authState = ref.watch(authStateProvider);
-  final user = authState.valueOrNull;
-  if (user == null) return Stream.value([]);
+final userMembershipsProvider =
+    StreamProvider.autoDispose<List<GreenhouseMembership>>((ref) {
+      final authState = ref.watch(authStateProvider);
+      final user = authState.valueOrNull;
+      if (user == null) return Stream.value([]);
 
-  final repo = ref.watch(greenhouseRepositoryProvider);
-  return repo.watchUserMemberships(user.uid);
-});
+      final repo = ref.watch(greenhouseRepositoryProvider);
+      return repo.watchUserMemberships(user.uid);
+    });
 
 /// Provider untuk greenhouse yang tersedia untuk user (berdasarkan role & membership)
-final availableGreenhousesProvider = Provider<AsyncValue<List<GreenhouseMembership>>>((ref) {
-  final profile = ref.watch(currentUserProfileProvider);
-  final memberships = ref.watch(userMembershipsProvider);
-  final allGreenhouses = ref.watch(allGreenhousesProvider);
+/// SEMUA role (Admin, Owner, Petani) sekarang menggunakan membership system
+/// Admin tidak lagi otomatis dapat akses ke semua greenhouse - harus di-assign juga
+final availableGreenhousesProvider =
+    Provider.autoDispose<AsyncValue<List<GreenhouseMembership>>>((ref) {
+      final profile = ref.watch(currentUserProfileProvider);
+      final memberships = ref.watch(userMembershipsProvider);
 
-  // Jika profile belum load, return loading
-  if (profile.isLoading) return const AsyncValue.loading();
-  if (profile.hasError) return AsyncValue.error(profile.error!, profile.stackTrace!);
+      // Jika profile belum load, return loading
+      if (profile.isLoading) return const AsyncValue.loading();
+      if (profile.hasError)
+        return AsyncValue.error(profile.error!, profile.stackTrace!);
 
-  final userProfile = profile.valueOrNull;
-  if (userProfile == null) return const AsyncValue.data([]);
+      final userProfile = profile.valueOrNull;
+      if (userProfile == null) return const AsyncValue.data([]);
 
-  debugPrint('[AvailableGreenhouses] User: ${userProfile.id}, Role: ${userProfile.role}');
+      debugPrint(
+        '[AvailableGreenhouses] User: ${userProfile.id}, Role: ${userProfile.role}',
+      );
 
-  // Admin: bisa akses semua greenhouse/devices
-  if (userProfile.isAdmin) {
-    if (allGreenhouses.isLoading) return const AsyncValue.loading();
-    if (allGreenhouses.hasError) {
-      return AsyncValue.error(allGreenhouses.error!, allGreenhouses.stackTrace!);
-    }
+      // Semua role (Admin/Owner/Petani): gunakan membership system
+      // Admin tidak lagi otomatis akses semua greenhouse
+      if (memberships.isLoading) return const AsyncValue.loading();
+      if (memberships.hasError) {
+        return AsyncValue.error(memberships.error!, memberships.stackTrace!);
+      }
 
-    final greenhouses = allGreenhouses.valueOrNull ?? [];
-    debugPrint('[AvailableGreenhouses] Admin access - ${greenhouses.length} devices');
-    
-    // Convert Greenhouse to GreenhouseMembership for uniform handling
-    return AsyncValue.data(greenhouses.map((gh) => GreenhouseMembership(
-      greenhouseId: gh.id,
-      userId: userProfile.id,
-      role: UserRole.admin,
-      greenhouseName: gh.name,
-      greenhouseLocation: gh.location,
-      deviceId: gh.deviceId,
-    )).toList());
-  }
+      final userMemberships = memberships.valueOrNull ?? [];
+      debugPrint(
+        '[AvailableGreenhouses] ${userProfile.role.label} - ${userMemberships.length} assigned greenhouses',
+      );
 
-  // Non-admin (owner/petani): return their memberships
-  if (memberships.isLoading) return const AsyncValue.loading();
-  if (memberships.hasError) {
-    return AsyncValue.error(memberships.error!, memberships.stackTrace!);
-  }
-
-  final userMemberships = memberships.valueOrNull ?? [];
-  debugPrint('[AvailableGreenhouses] Non-admin (${userProfile.role}) - ${userMemberships.length} memberships');
-  
-  return AsyncValue.data(userMemberships);
-});
+      return AsyncValue.data(userMemberships);
+    });
 
 /// Provider untuk selected greenhouse ID (dengan auto-select logic)
-final selectedGreenhouseIdProvider = StateNotifierProvider<SelectedGreenhouseNotifier, String?>((ref) {
-  return SelectedGreenhouseNotifier(ref);
-});
+final selectedGreenhouseIdProvider =
+    StateNotifierProvider.autoDispose<SelectedGreenhouseNotifier, String?>((
+      ref,
+    ) {
+      return SelectedGreenhouseNotifier(ref);
+    });
 
 class SelectedGreenhouseNotifier extends StateNotifier<String?> {
   SelectedGreenhouseNotifier(this._ref) : super(null) {
@@ -378,26 +372,40 @@ class SelectedGreenhouseNotifier extends StateNotifier<String?> {
 
   void _initialize() {
     // Listen to profile changes for initial value
-    _ref.listen<AsyncValue<UserProfile?>>(currentUserProfileProvider, (prev, next) {
+    _ref.listen<AsyncValue<UserProfile?>>(currentUserProfileProvider, (
+      prev,
+      next,
+    ) {
       final profile = next.valueOrNull;
       if (profile != null && !_initialized) {
         // Set initial value from profile's currentGreenhouseId
         if (profile.currentGreenhouseId != null) {
           state = profile.currentGreenhouseId;
           _initialized = true;
+          debugPrint('[SelectedGreenhouse] Init from profile: $state');
         }
       }
     });
 
     // Listen to available greenhouses for auto-select
-    _ref.listen<AsyncValue<List<GreenhouseMembership>>>(availableGreenhousesProvider, (prev, next) {
+    _ref.listen<
+      AsyncValue<List<GreenhouseMembership>>
+    >(availableGreenhousesProvider, (prev, next) {
       final memberships = next.valueOrNull;
       if (memberships != null && memberships.isNotEmpty && state == null) {
         // Auto-select first greenhouse if none selected
+        debugPrint(
+          '[SelectedGreenhouse] Auto-selecting first: ${memberships.first.greenhouseId}',
+        );
         _selectGreenhouse(memberships.first.greenhouseId);
       } else if (memberships != null && memberships.length == 1) {
         // Force select if only one greenhouse (for petani)
-        _selectGreenhouse(memberships.first.greenhouseId);
+        if (state != memberships.first.greenhouseId) {
+          debugPrint(
+            '[SelectedGreenhouse] Force selecting single: ${memberships.first.greenhouseId}',
+          );
+          _selectGreenhouse(memberships.first.greenhouseId);
+        }
       }
     });
   }
@@ -432,7 +440,9 @@ class SelectedGreenhouseNotifier extends StateNotifier<String?> {
 }
 
 /// Provider untuk selected greenhouse detail (dengan deviceId)
-final selectedGreenhouseProvider = Provider<GreenhouseMembership?>((ref) {
+final selectedGreenhouseProvider = Provider.autoDispose<GreenhouseMembership?>((
+  ref,
+) {
   final selectedId = ref.watch(selectedGreenhouseIdProvider);
   final available = ref.watch(availableGreenhousesProvider);
 
@@ -448,16 +458,17 @@ final selectedGreenhouseProvider = Provider<GreenhouseMembership?>((ref) {
 
 /// Provider untuk deviceId dari greenhouse yang dipilih
 /// Ini yang akan digunakan oleh repository lain (dashboard, monitoring, dll)
-final activeDeviceIdProvider = Provider<String?>((ref) {
+final activeDeviceIdProvider = Provider.autoDispose<String?>((ref) {
   final selected = ref.watch(selectedGreenhouseProvider);
   return selected?.deviceId;
 });
 
 /// Provider untuk cek apakah user perlu memilih greenhouse (dropdown visible)
-/// - Admin: tampilkan dropdown jika >1 device
-/// - Owner: tampilkan dropdown jika ≥1 device (monitoring multiple GH)
-/// - Petani: TIDAK pernah tampilkan dropdown (1 GH saja, auto-select)
-final shouldShowGreenhouseSelectorProvider = Provider<bool>((ref) {
+/// Dropdown hanya muncul jika:
+/// - User memiliki permission untuk pilih greenhouse (Admin/Owner)
+/// - DAN ada lebih dari 1 pilihan (available.length > 1)
+/// Petani tidak pernah lihat dropdown (1 GH auto-select)
+final shouldShowGreenhouseSelectorProvider = Provider.autoDispose<bool>((ref) {
   final profile = ref.watch(currentUserProfileProvider).valueOrNull;
   final available = ref.watch(availableGreenhousesProvider).valueOrNull ?? [];
 
@@ -470,17 +481,9 @@ final shouldShowGreenhouseSelectorProvider = Provider<bool>((ref) {
     return false;
   }
 
-  // Admin: tampilkan jika ada >1 device
-  if (profile.isAdmin) {
-    return available.length > 1;
-  }
-
-  // Owner: tampilkan jika punya minimal 1 GH
-  if (profile.role == UserRole.owner) {
-    return available.isNotEmpty;
-  }
-
-  return false;
+  // Admin & Owner: tampilkan dropdown HANYA jika ada >1 pilihan
+  // Jika cuma 1, tidak perlu dropdown (tidak ada yang bisa dipilih)
+  return available.length > 1;
 });
 
 /// Provider untuk status greenhouse (apakah user punya akses)
@@ -504,9 +507,4 @@ final greenhouseAccessStateProvider = Provider<GreenhouseAccessState>((ref) {
   return GreenhouseAccessState.hasAccess;
 });
 
-enum GreenhouseAccessState {
-  loading,
-  hasAccess,
-  noAccess,
-  error,
-}
+enum GreenhouseAccessState { loading, hasAccess, noAccess, error }

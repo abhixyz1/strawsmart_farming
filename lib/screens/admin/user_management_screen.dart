@@ -7,11 +7,10 @@ import '../../core/utils/greenhouse_setup_helper.dart';
 import '../auth/user_profile_repository.dart';
 
 /// Provider untuk list semua users
-final allUsersProvider = StreamProvider<List<UserProfile>>((ref) {
-  return FirebaseFirestore.instance
-      .collection('users')
-      .snapshots()
-      .map((snapshot) {
+final allUsersProvider = StreamProvider.autoDispose<List<UserProfile>>((ref) {
+  return FirebaseFirestore.instance.collection('users').snapshots().map((
+    snapshot,
+  ) {
     return snapshot.docs.map((doc) {
       final data = doc.data();
       return UserProfile(
@@ -28,19 +27,16 @@ final allUsersProvider = StreamProvider<List<UserProfile>>((ref) {
 });
 
 /// Provider untuk list semua devices
-final allDevicesProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
-  return FirebaseFirestore.instance
-      .collection('devices')
-      .snapshots()
-      .map((snapshot) {
-    return snapshot.docs.map((doc) {
-      return {
-        'id': doc.id,
-        ...doc.data(),
-      };
-    }).toList();
-  });
-});
+final allDevicesProvider =
+    StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+      return FirebaseFirestore.instance.collection('devices').snapshots().map((
+        snapshot,
+      ) {
+        return snapshot.docs.map((doc) {
+          return {'id': doc.id, ...doc.data()};
+        }).toList();
+      });
+    });
 
 /// Screen untuk Admin mengelola users dan assign ke greenhouse
 class UserManagementScreen extends ConsumerWidget {
@@ -52,20 +48,15 @@ class UserManagementScreen extends ConsumerWidget {
     final devicesAsync = ref.watch(allDevicesProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Kelola Pengguna'),
-        centerTitle: true,
-      ),
+      appBar: AppBar(title: const Text('Kelola Pengguna'), centerTitle: true),
       body: usersAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Error: $e')),
         data: (users) {
           final devices = devicesAsync.valueOrNull ?? [];
-          
+
           if (users.isEmpty) {
-            return const Center(
-              child: Text('Belum ada pengguna terdaftar'),
-            );
+            return const Center(child: Text('Belum ada pengguna terdaftar'));
           }
 
           return ListView.builder(
@@ -73,10 +64,7 @@ class UserManagementScreen extends ConsumerWidget {
             itemCount: users.length,
             itemBuilder: (context, index) {
               final user = users[index];
-              return _UserCard(
-                user: user,
-                devices: devices,
-              );
+              return _UserCard(user: user, devices: devices);
             },
           );
         },
@@ -86,10 +74,7 @@ class UserManagementScreen extends ConsumerWidget {
 }
 
 class _UserCard extends ConsumerStatefulWidget {
-  const _UserCard({
-    required this.user,
-    required this.devices,
-  });
+  const _UserCard({required this.user, required this.devices});
 
   final UserProfile user;
   final List<Map<String, dynamic>> devices;
@@ -113,7 +98,9 @@ class _UserCardState extends ConsumerState<_UserCard> {
     try {
       final helper = GreenhouseSetupHelper();
       final memberships = await helper.getUserMemberships(widget.user.id);
-      debugPrint('[UserManagement] Loaded memberships for ${widget.user.id}: ${memberships.length} items');
+      debugPrint(
+        '[UserManagement] Loaded memberships for ${widget.user.id}: ${memberships.length} items',
+      );
       if (mounted) {
         setState(() {
           _userMemberships = memberships
@@ -122,7 +109,9 @@ class _UserCardState extends ConsumerState<_UserCard> {
         });
       }
     } catch (e) {
-      debugPrint('[UserManagement] Error loading memberships for ${widget.user.id}: $e');
+      debugPrint(
+        '[UserManagement] Error loading memberships for ${widget.user.id}: $e',
+      );
       if (mounted) {
         setState(() {
           _userMemberships = [];
@@ -145,10 +134,12 @@ class _UserCardState extends ConsumerState<_UserCard> {
           // User header
           ListTile(
             leading: CircleAvatar(
-              backgroundColor: _getRoleColor(user.role).withAlpha((255 * 0.2).round()),
+              backgroundColor: _getRoleColor(
+                user.role,
+              ).withAlpha((255 * 0.2).round()),
               child: Text(
                 user.name.isNotEmpty
-                    ? user.name[0].toUpperCase() 
+                    ? user.name[0].toUpperCase()
                     : user.email[0].toUpperCase(),
                 style: TextStyle(
                   color: _getRoleColor(user.role),
@@ -176,7 +167,7 @@ class _UserCardState extends ConsumerState<_UserCard> {
               onPressed: () => setState(() => _isExpanded = !_isExpanded),
             ),
           ),
-          
+
           // Expanded section
           if (_isExpanded) ...[
             const Divider(height: 1),
@@ -202,13 +193,13 @@ class _UserCardState extends ConsumerState<_UserCard> {
                       );
                     }).toList(),
                     selected: {user.role},
-                    onSelectionChanged: _isLoading 
-                        ? null 
+                    onSelectionChanged: _isLoading
+                        ? null
                         : (selection) => _changeRole(selection.first),
                   ),
-                  
+
                   const SizedBox(height: 20),
-                  
+
                   // Greenhouse assignment
                   Text(
                     'Assign Greenhouse',
@@ -217,7 +208,7 @@ class _UserCardState extends ConsumerState<_UserCard> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  
+
                   if (widget.devices.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(12),
@@ -245,7 +236,11 @@ class _UserCardState extends ConsumerState<_UserCard> {
                         ),
                         child: Row(
                           children: [
-                            Icon(Icons.info_outline, size: 16, color: colorScheme.onTertiaryContainer),
+                            Icon(
+                              Icons.info_outline,
+                              size: 16,
+                              color: colorScheme.onTertiaryContainer,
+                            ),
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
@@ -263,20 +258,23 @@ class _UserCardState extends ConsumerState<_UserCard> {
                       runSpacing: 8,
                       children: widget.devices.map((device) {
                         final deviceId = device['id'] as String;
-                        final deviceName = device['name'] as String? ?? deviceId;
+                        final deviceName =
+                            device['name'] as String? ?? deviceId;
                         final isAssigned = _userMemberships.contains(deviceId);
-                        
+
                         // Untuk Petani: disable chip lain jika sudah ada 1 GH ter-assign
                         final isPetani = user.role == UserRole.petani;
                         final hasAssignment = _userMemberships.isNotEmpty;
-                        final isDisabled = isPetani && hasAssignment && !isAssigned;
-                        
+                        final isDisabled =
+                            isPetani && hasAssignment && !isAssigned;
+
                         return FilterChip(
                           label: Text(deviceName),
                           selected: isAssigned,
                           onSelected: _isLoading || isDisabled
-                              ? null 
-                              : (selected) => _toggleAssignment(deviceId, selected),
+                              ? null
+                              : (selected) =>
+                                    _toggleAssignment(deviceId, selected),
                           avatar: Icon(
                             isAssigned ? Icons.check : Icons.add,
                             size: 16,
@@ -285,20 +283,27 @@ class _UserCardState extends ConsumerState<_UserCard> {
                       }).toList(),
                     ),
                   ],
-                  
+
                   const SizedBox(height: 12),
-                  
+
                   // Quick actions
                   Row(
                     children: [
                       Expanded(
                         child: OutlinedButton.icon(
                           // Disable "Assign Semua" untuk Petani yang sudah punya assignment
-                          onPressed: _isLoading || (user.role == UserRole.petani && _userMemberships.isNotEmpty)
-                              ? null 
+                          onPressed:
+                              _isLoading ||
+                                  (user.role == UserRole.petani &&
+                                      _userMemberships.isNotEmpty)
+                              ? null
                               : _assignAllDevices,
                           icon: const Icon(Icons.select_all, size: 18),
-                          label: Text(user.role == UserRole.petani ? 'Assign 1 GH' : 'Assign Semua'),
+                          label: Text(
+                            user.role == UserRole.petani
+                                ? 'Assign 1 GH'
+                                : 'Assign Semua',
+                          ),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -314,7 +319,7 @@ class _UserCardState extends ConsumerState<_UserCard> {
                       ),
                     ],
                   ),
-                  
+
                   if (_isLoading)
                     const Padding(
                       padding: EdgeInsets.only(top: 16),
@@ -382,14 +387,14 @@ class _UserCardState extends ConsumerState<_UserCard> {
     setState(() => _isLoading = true);
     try {
       final helper = GreenhouseSetupHelper();
-      
+
       // Untuk Petani: hanya assign 1 greenhouse pertama
       if (widget.user.role == UserRole.petani) {
         if (_userMemberships.isNotEmpty) {
           _showSnackBar('Petani hanya boleh 1 greenhouse');
           return;
         }
-        
+
         if (widget.devices.isNotEmpty) {
           final firstDevice = widget.devices.first;
           final deviceId = firstDevice['id'] as String;
@@ -403,7 +408,7 @@ class _UserCardState extends ConsumerState<_UserCard> {
         }
         return;
       }
-      
+
       // Untuk Admin/Owner: assign semua
       for (final device in widget.devices) {
         final deviceId = device['id'] as String;
@@ -448,8 +453,8 @@ class _UserCardState extends ConsumerState<_UserCard> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError 
-            ? Theme.of(context).colorScheme.error 
+        backgroundColor: isError
+            ? Theme.of(context).colorScheme.error
             : Theme.of(context).colorScheme.primary,
       ),
     );
@@ -486,7 +491,7 @@ class _RoleBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _getRoleColor(role);
-    
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(

@@ -36,10 +36,32 @@ class DashboardAppBar extends ConsumerWidget {
   }
 
   /// Header dengan background ilustrasi untuk tab beranda
-  Widget _buildHomeHeader(BuildContext context, WidgetRef ref, ThemeData theme) {
+  Widget _buildHomeHeader(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeData theme,
+  ) {
     final selected = ref.watch(selectedGreenhouseProvider);
     final shouldShowSelector = ref.watch(shouldShowGreenhouseSelectorProvider);
-    final greenhouseName = selected?.displayName ?? 'StrawSmart';
+    final available = ref.watch(availableGreenhousesProvider).valueOrNull ?? [];
+
+    // Tentukan label yang akan ditampilkan
+    final String displayLabel;
+    final Color labelColor;
+
+    if (available.isEmpty) {
+      // User tidak punya akses ke greenhouse sama sekali
+      displayLabel = 'Belum Ada Akses';
+      labelColor = theme.colorScheme.onSurfaceVariant;
+    } else if (selected == null) {
+      // User punya akses tapi belum memilih
+      displayLabel = 'Pilih Greenhouse';
+      labelColor = theme.colorScheme.primary;
+    } else {
+      // User sudah memilih greenhouse
+      displayLabel = selected.displayName;
+      labelColor = theme.colorScheme.onSurface;
+    }
 
     return Container(
       decoration: BoxDecoration(
@@ -60,9 +82,11 @@ class DashboardAppBar extends ConsumerWidget {
             children: [
               // Ikon lokasi
               Icon(
-                Icons.location_on,
+                available.isEmpty ? Icons.location_off : Icons.location_on,
                 size: 22,
-                color: theme.colorScheme.primary,
+                color: available.isEmpty
+                    ? theme.colorScheme.onSurfaceVariant
+                    : theme.colorScheme.primary,
               ),
               const SizedBox(width: 8),
               // Nama greenhouse dengan dropdown icon
@@ -76,10 +100,10 @@ class DashboardAppBar extends ConsumerWidget {
                     children: [
                       Flexible(
                         child: Text(
-                          greenhouseName,
+                          displayLabel,
                           style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w600,
-                            color: theme.colorScheme.onSurface,
+                            color: labelColor,
                           ),
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -140,10 +164,36 @@ class DashboardAppBar extends ConsumerWidget {
   }
 
   /// Header konsisten untuk tab Monitoring, Batch, Laporan
-  Widget _buildOtherTabHeader(BuildContext context, WidgetRef ref, ThemeData theme) {
+  Widget _buildOtherTabHeader(
+    BuildContext context,
+    WidgetRef ref,
+    ThemeData theme,
+  ) {
     final selected = ref.watch(selectedGreenhouseProvider);
     final shouldShowSelector = ref.watch(shouldShowGreenhouseSelectorProvider);
-    final greenhouseName = selected?.displayName ?? 'StrawSmart';
+    final available = ref.watch(availableGreenhousesProvider).valueOrNull ?? [];
+
+    // Tentukan label yang akan ditampilkan
+    final String displayLabel;
+    final Color badgeColor;
+    final IconData iconData;
+
+    if (available.isEmpty) {
+      // User tidak punya akses ke greenhouse sama sekali
+      displayLabel = 'Belum Ada Akses';
+      badgeColor = theme.colorScheme.surfaceContainerHighest;
+      iconData = Icons.location_off;
+    } else if (selected == null) {
+      // User punya akses tapi belum memilih
+      displayLabel = 'Pilih Greenhouse';
+      badgeColor = theme.colorScheme.primary.withAlpha((255 * 0.1).round());
+      iconData = Icons.location_on;
+    } else {
+      // User sudah memilih greenhouse
+      displayLabel = selected.displayName;
+      badgeColor = theme.colorScheme.primary.withAlpha((255 * 0.1).round());
+      iconData = Icons.location_on;
+    }
 
     return SafeArea(
       bottom: false,
@@ -175,27 +225,34 @@ class DashboardAppBar extends ConsumerWidget {
                   ? () => _showGreenhouseSelector(context, ref)
                   : null,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withAlpha((255 * 0.1).round()),
+                  color: badgeColor,
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.location_on,
+                      iconData,
                       size: 14,
-                      color: theme.colorScheme.primary,
+                      color: available.isEmpty
+                          ? theme.colorScheme.onSurfaceVariant
+                          : theme.colorScheme.primary,
                     ),
                     const SizedBox(width: 4),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 100),
                       child: Text(
-                        greenhouseName,
+                        displayLabel,
                         style: theme.textTheme.labelMedium?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.primary,
+                          color: available.isEmpty
+                              ? theme.colorScheme.onSurfaceVariant
+                              : theme.colorScheme.primary,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -257,7 +314,7 @@ class _NotificationButton extends ConsumerWidget {
         unreadCountAsync.when(
           data: (unreadCount) {
             if (unreadCount == 0) return const SizedBox.shrink();
-            
+
             return Positioned(
               right: 8,
               top: 8,
@@ -267,10 +324,7 @@ class _NotificationButton extends ConsumerWidget {
                   color: theme.colorScheme.error,
                   shape: BoxShape.circle,
                 ),
-                constraints: const BoxConstraints(
-                  minWidth: 16,
-                  minHeight: 16,
-                ),
+                constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                 child: Center(
                   child: Text(
                     unreadCount > 99 ? '99+' : '$unreadCount',
@@ -328,7 +382,9 @@ class _GreenhouseSelectorSheet extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withAlpha((255 * 0.1).round()),
+                  color: theme.colorScheme.primary.withAlpha(
+                    (255 * 0.1).round(),
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
@@ -424,7 +480,9 @@ class _GreenhouseListTile extends StatelessWidget {
       child: Material(
         color: isSelected
             ? theme.colorScheme.primary.withAlpha((255 * 0.1).round())
-            : theme.colorScheme.surfaceContainerHighest.withAlpha((255 * 0.5).round()),
+            : theme.colorScheme.surfaceContainerHighest.withAlpha(
+                (255 * 0.5).round(),
+              ),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onTap,
@@ -445,7 +503,9 @@ class _GreenhouseListTile extends StatelessWidget {
                   child: Text(
                     name,
                     style: theme.textTheme.bodyLarge?.copyWith(
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w500,
                       color: isSelected
                           ? theme.colorScheme.primary
                           : theme.colorScheme.onSurface,

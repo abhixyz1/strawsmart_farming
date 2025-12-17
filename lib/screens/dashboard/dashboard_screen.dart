@@ -8,6 +8,7 @@ import '../monitoring/monitoring_screen.dart';
 import '../profile/profile_screen.dart';
 import '../batch/batch_management_screen.dart';
 import '../logs/logs_screen.dart';
+import '../greenhouse/greenhouse_repository.dart';
 import '../../core/widgets/app_shell.dart';
 import '../../core/services/schedule_executor_service.dart';
 import '../../core/services/anomaly_detection_service.dart';
@@ -35,13 +36,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedIndex = 0;
   bool _isSendingPumpCommand = false;
   bool _isUpdatingControlMode = false;
-  
+
   // Rate limiting for mode switching
   DateTime? _lastModeChangeTime;
   int _modeChangeCount = 0;
   static const _modeChangeThreshold = 3; // Max changes allowed
   static const _modeChangeCooldown = Duration(seconds: 10); // Reset window
-  
+
   // Rate limiting for pump toggle
   DateTime? _lastPumpToggleTime;
   int _pumpToggleCount = 0;
@@ -50,7 +51,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   // Throttling untuk anomaly detection agar tidak check terlalu sering
   DateTime? _lastAnomalyCheck;
-  static const _anomalyCheckInterval = Duration(seconds: 30); // Check setiap 30 detik (sesuai sensor update)
+  static const _anomalyCheckInterval = Duration(
+    seconds: 30,
+  ); // Check setiap 30 detik (sesuai sensor update)
 
   // ---------------------------------------------------------------------------
   // Konstanta navigasi
@@ -96,7 +99,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     // Aktivasi schedule executor service
     ref.watch(scheduleExecutorServiceProvider);
-    
+
     // Monitor anomali sensor dan trigger notifikasi
     _monitorSensorAnomalies(latestAsync, statusAsync);
 
@@ -108,10 +111,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          DashboardAppBar(
-            title: sectionTitle,
-            isHomeTab: _selectedIndex == 0,
-          ),
+          DashboardAppBar(title: sectionTitle, isHomeTab: _selectedIndex == 0),
           // Divider hanya untuk tab selain home (home sudah ada background)
           if (_selectedIndex != 0) const Divider(height: 1),
           Expanded(
@@ -164,6 +164,103 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     AsyncValue<PumpStatusData?> pumpAsync,
     AsyncValue<ControlMode> controlModeAsync,
   ) {
+    // Cek apakah user punya akses ke greenhouse
+    final available = ref.watch(availableGreenhousesProvider).valueOrNull ?? [];
+    final selected = ref.watch(selectedGreenhouseProvider);
+
+    // Jika user tidak punya akses sama sekali, tampilkan empty state
+    if (available.isEmpty) {
+      return RefreshIndicator(
+        color: Theme.of(context).colorScheme.primary,
+        onRefresh: _onRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height - 200,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.eco_outlined,
+                    size: 80,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withAlpha((255 * 0.3).round()),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Belum Ada Akses Greenhouse',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Hubungi admin untuk mendapatkan akses\nke greenhouse',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Jika user punya akses tapi belum ada greenhouse yang dipilih
+    if (selected == null) {
+      return RefreshIndicator(
+        color: Theme.of(context).colorScheme.primary,
+        onRefresh: _onRefresh,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(20),
+          child: SizedBox(
+            height: MediaQuery.of(context).size.height - 200,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.location_searching,
+                    size: 80,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withAlpha((255 * 0.5).round()),
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Memuat Greenhouse...',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Mohon tunggu sebentar',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const CircularProgressIndicator(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    // User sudah punya akses dan sudah memilih greenhouse - tampilkan data normal
     return RefreshIndicator(
       color: Theme.of(context).colorScheme.primary,
       onRefresh: _onRefresh,
@@ -198,7 +295,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // ---------------------------------------------------------------------------
   Widget _buildConditionSection(AsyncValue<SensorSnapshot?> latestAsync) {
     final data = latestAsync.valueOrNull;
-    
+
     // Kartu kondisi greenhouse dengan data sensor
     return GreenhouseConditionCard(snapshot: data);
   }
@@ -337,7 +434,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     if (_isSendingPumpCommand) return;
 
     final isOnline = status?.isDeviceOnline ?? false;
-    
+
     // Alert jika device offline
     if (!isOnline) {
       _showOfflineAlert();
@@ -349,7 +446,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       _showAutoModeAlert();
       return;
     }
-    
+
     // Rate limiting untuk pump toggle
     final now = DateTime.now();
     if (_lastPumpToggleTime != null) {
@@ -371,7 +468,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
     setState(() => _isSendingPumpCommand = true);
     try {
-      await ref.read(dashboardRepositoryProvider).sendPumpCommand(
+      await ref
+          .read(dashboardRepositoryProvider)
+          .sendPumpCommand(
             turnOn: desiredState,
             durationSeconds: desiredState ? 60 : 0,
           );
@@ -382,7 +481,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       if (mounted) setState(() => _isSendingPumpCommand = false);
     }
   }
-  
+
   void _showOfflineAlert() {
     if (!mounted) return;
     showDialog(
@@ -408,19 +507,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 20),
             const Text(
               'Perangkat Offline',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
               'Tidak dapat mengontrol pompa karena\nperangkat tidak terhubung.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                height: 1.4,
-              ),
+              style: TextStyle(color: Colors.grey[600], height: 1.4),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -442,7 +535,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
-  
+
   void _showAutoModeAlert() {
     if (!mounted) return;
     showDialog(
@@ -468,19 +561,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             const SizedBox(height: 20),
             const Text(
               'Mode Otomatis Aktif',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-              ),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             Text(
               'Pompa dikontrol oleh sistem Fuzzy.\nGanti ke mode Manual untuk kontrol manual.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.grey[600],
-                height: 1.4,
-              ),
+              style: TextStyle(color: Colors.grey[600], height: 1.4),
             ),
             const SizedBox(height: 20),
             SizedBox(
@@ -502,14 +589,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       ),
     );
   }
-  
+
   void _showPumpRateLimitAlert() {
     if (!mounted) return;
-    
+
     final remainingSeconds = _lastPumpToggleTime != null
-        ? (_pumpToggleCooldown.inSeconds - DateTime.now().difference(_lastPumpToggleTime!).inSeconds).clamp(0, _pumpToggleCooldown.inSeconds)
+        ? (_pumpToggleCooldown.inSeconds -
+                  DateTime.now().difference(_lastPumpToggleTime!).inSeconds)
+              .clamp(0, _pumpToggleCooldown.inSeconds)
         : _pumpToggleCooldown.inSeconds;
-    
+
     showDialog(
       context: context,
       builder: (context) => _PumpRateLimitDialog(
@@ -554,12 +643,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   void _showRateLimitAlert() {
     if (!mounted) return;
-    
+
     // Calculate remaining cooldown time
     final remainingSeconds = _lastModeChangeTime != null
-        ? (_modeChangeCooldown.inSeconds - DateTime.now().difference(_lastModeChangeTime!).inSeconds).clamp(0, _modeChangeCooldown.inSeconds)
+        ? (_modeChangeCooldown.inSeconds -
+                  DateTime.now().difference(_lastModeChangeTime!).inSeconds)
+              .clamp(0, _modeChangeCooldown.inSeconds)
         : _modeChangeCooldown.inSeconds;
-    
+
     showDialog(
       context: context,
       builder: (context) => _RateLimitDialog(
@@ -573,10 +664,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   // Helper methods
   // ---------------------------------------------------------------------------
   Object? _errorOrNull<T>(AsyncValue<T> value) {
-    return value.maybeWhen(
-      error: (error, _) => error,
-      orElse: () => null,
-    );
+    return value.maybeWhen(error: (error, _) => error, orElse: () => null);
   }
 
   String? _pumpRuntimeLabel(DeviceStatusData? status, PumpStatusData? pump) {
@@ -660,7 +748,7 @@ class _RateLimitDialogState extends State<_RateLimitDialog> {
   @override
   Widget build(BuildContext context) {
     final isComplete = _remainingSeconds <= 0;
-    
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       content: Column(
@@ -675,11 +763,15 @@ class _RateLimitDialogState extends State<_RateLimitDialog> {
                 width: 80,
                 height: 80,
                 child: CircularProgressIndicator(
-                  value: isComplete ? 1.0 : _remainingSeconds / widget.initialSeconds,
+                  value: isComplete
+                      ? 1.0
+                      : _remainingSeconds / widget.initialSeconds,
                   strokeWidth: 6,
                   backgroundColor: Colors.grey.withAlpha((255 * 0.2).round()),
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    isComplete ? const Color(0xFF66BB6A) : const Color(0xFFFFB74D),
+                    isComplete
+                        ? const Color(0xFF66BB6A)
+                        : const Color(0xFFFFB74D),
                   ),
                 ),
               ),
@@ -689,7 +781,9 @@ class _RateLimitDialogState extends State<_RateLimitDialog> {
                   Icon(
                     isComplete ? Icons.check_rounded : Icons.timer_rounded,
                     size: 28,
-                    color: isComplete ? const Color(0xFF66BB6A) : const Color(0xFFFFB74D),
+                    color: isComplete
+                        ? const Color(0xFF66BB6A)
+                        : const Color(0xFFFFB74D),
                   ),
                   if (!isComplete) ...[
                     const SizedBox(height: 2),
@@ -710,22 +804,16 @@ class _RateLimitDialogState extends State<_RateLimitDialog> {
           // Title
           Text(
             isComplete ? 'Siap!' : 'Terlalu Cepat!',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           // Message
           Text(
-            isComplete 
+            isComplete
                 ? 'Anda dapat mengubah mode kembali.'
                 : 'Tunggu $_remainingSeconds detik sebelum\nmengubah mode lagi.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey[600],
-              height: 1.4,
-            ),
+            style: TextStyle(color: Colors.grey[600], height: 1.4),
           ),
           const SizedBox(height: 20),
           // Button
@@ -734,8 +822,8 @@ class _RateLimitDialogState extends State<_RateLimitDialog> {
             child: FilledButton(
               onPressed: widget.onComplete,
               style: FilledButton.styleFrom(
-                backgroundColor: isComplete 
-                    ? const Color(0xFF66BB6A) 
+                backgroundColor: isComplete
+                    ? const Color(0xFF66BB6A)
                     : const Color(0xFFFFB74D),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
@@ -760,7 +848,7 @@ class _PumpRateLimitDialog extends StatefulWidget {
     required this.initialSeconds,
     required this.onComplete,
   });
-  
+
   final int initialSeconds;
   final VoidCallback onComplete;
 
@@ -798,7 +886,7 @@ class _PumpRateLimitDialogState extends State<_PumpRateLimitDialog> {
   @override
   Widget build(BuildContext context) {
     final isComplete = _remainingSeconds <= 0;
-    
+
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       content: Column(
@@ -813,11 +901,15 @@ class _PumpRateLimitDialogState extends State<_PumpRateLimitDialog> {
                 width: 80,
                 height: 80,
                 child: CircularProgressIndicator(
-                  value: isComplete ? 1.0 : _remainingSeconds / widget.initialSeconds,
+                  value: isComplete
+                      ? 1.0
+                      : _remainingSeconds / widget.initialSeconds,
                   strokeWidth: 6,
                   backgroundColor: Colors.grey.withAlpha((255 * 0.2).round()),
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    isComplete ? const Color(0xFF66BB6A) : const Color(0xFF42A5F5),
+                    isComplete
+                        ? const Color(0xFF66BB6A)
+                        : const Color(0xFF42A5F5),
                   ),
                 ),
               ),
@@ -827,7 +919,9 @@ class _PumpRateLimitDialogState extends State<_PumpRateLimitDialog> {
                   Icon(
                     isComplete ? Icons.check_rounded : Icons.water_drop_rounded,
                     size: 28,
-                    color: isComplete ? const Color(0xFF66BB6A) : const Color(0xFF42A5F5),
+                    color: isComplete
+                        ? const Color(0xFF66BB6A)
+                        : const Color(0xFF42A5F5),
                   ),
                   if (!isComplete) ...[
                     const SizedBox(height: 2),
@@ -848,22 +942,16 @@ class _PumpRateLimitDialogState extends State<_PumpRateLimitDialog> {
           // Title
           Text(
             isComplete ? 'Siap!' : 'Pompa Perlu Istirahat',
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-            ),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
           // Message
           Text(
-            isComplete 
+            isComplete
                 ? 'Anda dapat mengontrol pompa kembali.'
                 : 'Terlalu sering toggle pompa.\nTunggu $_remainingSeconds detik.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              color: Colors.grey[600],
-              height: 1.4,
-            ),
+            style: TextStyle(color: Colors.grey[600], height: 1.4),
           ),
           const SizedBox(height: 20),
           // Button
@@ -872,8 +960,8 @@ class _PumpRateLimitDialogState extends State<_PumpRateLimitDialog> {
             child: FilledButton(
               onPressed: widget.onComplete,
               style: FilledButton.styleFrom(
-                backgroundColor: isComplete 
-                    ? const Color(0xFF66BB6A) 
+                backgroundColor: isComplete
+                    ? const Color(0xFF66BB6A)
                     : const Color(0xFF42A5F5),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(
