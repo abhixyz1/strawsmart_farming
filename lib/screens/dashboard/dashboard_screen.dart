@@ -95,7 +95,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final statusAsync = ref.watch(deviceStatusProvider);
     final pumpAsync = ref.watch(pumpStatusProvider);
     final controlModeAsync = ref.watch(controlModeProvider);
-    final sectionTitle = _destinations[_selectedIndex].label;
 
     // Aktivasi schedule executor service
     ref.watch(scheduleExecutorServiceProvider);
@@ -108,51 +107,37 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       selectedIndex: _selectedIndex,
       onIndexChanged: (index) => setState(() => _selectedIndex = index),
       floatingActionButton: null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          DashboardAppBar(title: sectionTitle, isHomeTab: _selectedIndex == 0),
-          // Divider hanya untuk tab selain home (home sudah ada background)
-          if (_selectedIndex != 0) const Divider(height: 1),
-          Expanded(
-            child: _buildBody(
-              latestAsync,
-              statusAsync,
-              pumpAsync,
-              controlModeAsync,
-            ),
-          ),
-        ],
-      ),
+      children: [
+        // Tab 0: Beranda
+        _buildTabContent(
+          'Beranda',
+          true,
+          _buildHomeTab(latestAsync, statusAsync, pumpAsync, controlModeAsync),
+        ),
+        // Tab 1: Monitoring
+        _buildTabContent('Monitoring', false, const MonitoringScreen()),
+        // Tab 2: Batch
+        _buildTabContent('Batch', false, const BatchManagementScreen()),
+        // Tab 3: Laporan
+        _buildTabContent('Laporan', false, const LaporanScreen()),
+        // Tab 4: Pengaturan
+        _buildTabContent('Pengaturan', false, const ProfileScreen()),
+      ],
     );
   }
 
   // ---------------------------------------------------------------------------
-  // Body berdasarkan tab yang dipilih
+  // Helper untuk membungkus konten tab dengan AppBar
   // ---------------------------------------------------------------------------
-  Widget _buildBody(
-    AsyncValue<SensorSnapshot?> latestAsync,
-    AsyncValue<DeviceStatusData?> statusAsync,
-    AsyncValue<PumpStatusData?> pumpAsync,
-    AsyncValue<ControlMode> controlModeAsync,
-  ) {
-    switch (_selectedIndex) {
-      case 1:
-        return const MonitoringScreen();
-      case 2:
-        return const BatchManagementScreen();
-      case 3:
-        return const LaporanScreen();
-      case 4:
-        return const ProfileScreen();
-      default:
-        return _buildHomeTab(
-          latestAsync,
-          statusAsync,
-          pumpAsync,
-          controlModeAsync,
-        );
-    }
+  Widget _buildTabContent(String title, bool isHomeTab, Widget content) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        DashboardAppBar(title: title, isHomeTab: isHomeTab),
+        if (!isHomeTab) const Divider(height: 1),
+        Expanded(child: content),
+      ],
+    );
   }
 
   // ---------------------------------------------------------------------------
