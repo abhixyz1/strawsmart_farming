@@ -7,15 +7,15 @@
 
 ---
 
-## 👥 Tim Pengembang
+## 👥 Anggota Kelompok
 
-| NAMA | NIM | PERAN |
-| :--- | :--- | :--- |
-| **M. Abhinaya Zurfa** | 2341760186 | *Lead Developer / Mobile App* |
-| **Erfin Jauhari Dwi Brian** | 2341760088 | *Backend / IoT Integration* |
-| **Fatima Sitta M.** | 2341760167 | *UI/UX Designer* |
-| **Jami'atul Afifah** | 2341760102 | *Database Administrator* |
-| **Syaqira Nazaretna** | 2341760123 | *Quality Assurance* |
+| NAMA | NIM |
+| :--- | :--- |
+| **M. Abhinaya Zurfa** | 2341760186 |
+| **Erfin Jauhari Dwi Brian** | 2341760088 |
+| **Fatima Sitta M.** | 2341760167 |
+| **Jami'atul Afifah** | 2341760102 |
+| **Syaqira Nazaretna** | 2341760123 |
 
 ---
 
@@ -81,7 +81,7 @@ Pastikan Anda telah menginstal:
 3.  **Konfigurasi Firebase**
     *   Pastikan file `google-services.json` (untuk Android) ada di folder `android/app/`.
     *   Pastikan file `firebase_options.dart` ada di folder `lib/`.
-    *(Hubungi tim pengembang jika Anda belum memiliki file kredensial ini)*.
+    *(Hubungi anggota tim untuk file kredensial)*.
 
 4.  **Jalankan Aplikasi**
     Sambungkan perangkat Android atau gunakan Emulator, lalu jalankan:
